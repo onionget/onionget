@@ -1,5 +1,5 @@
 #pragma once
-#include "stdint.h"
+#include <stdint.h>
 #include "datacontainer.h"
 
 #define DLL_HEAD 0
