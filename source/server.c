@@ -258,7 +258,7 @@ int cacheSharedFiles(server* this)
       continue; 
     }
 
-    if( !this->cachedSharedFiles->insert(this->cachedSharedFiles, DLL_HEAD, fileEntry->d_name, strlen(fileEntry->d_name), diskFile->read(diskFile)) ){
+    if( !this->cachedSharedFiles->insert(this->cachedSharedFiles, DLL_HEAD, fileEntry->d_name, strlen(fileEntry->d_name), diskFile->diskFileRead(diskFile)) ){
       printf("Error: Failed to insert file into cached file list!");
       return 0; 
     }

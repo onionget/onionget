@@ -149,7 +149,7 @@ static int getFiles(client* this, int argc, char *argv[])
       return 0;
     }
     
-    if( !diskFile->write(diskFile, incomingFile) ){
+    if( !diskFile->diskFileWrite(diskFile, incomingFile) ){
       printf("Error: Failed to write file to disk, aborting\n");
       return 0;
     }

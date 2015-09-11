@@ -8,8 +8,8 @@ typedef struct diskFile{
   uint32_t fullPathBytesize; 
   FILE     *descriptor; 
   
-  int (*write)(struct diskFile* this, dataContainer* dataContainer);
-  dataContainer *(*read)(struct diskFile* this); 
+  int (*diskFileWrite)(struct diskFile* this, dataContainer* dataContainer);
+  dataContainer *(*diskFileRead)(struct diskFile* this); 
   void (*closeTearDown)(struct diskFile** thisPointer); 
   long int (*getBytesize)(struct diskFile* this);
 }diskFile; 

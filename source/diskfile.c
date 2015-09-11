@@ -11,14 +11,16 @@
 enum{ COUNT = 1 };
 
 //PUBLIC METHODS
-static dataContainer* read(diskFile* this);
-static int write(diskFile* this, dataContainer* dataContainer);
+static int diskFileWrite(diskFile* this, dataContainer* dataContainer);
+static dataContainer* diskFileRead(diskFile* this);
+
+
 static void closeTearDown(diskFile** thisPointer);
 static long int getBytesize(diskFile* this);
-static dataContainer* read(diskFile* this);
+
 
 //PRIVATE METHODS
-static int open(diskFile* this, char* mode);
+static int diskFileOpen(diskFile* this, char* mode);
 static int fileModeReadable(char* mode);
 static int fileModeWritable(char* mode);
 static int fileModeValid(char* mode);
@@ -84,7 +86,7 @@ diskFile* newDiskFile(char* path, char* name, char* mode)
   
   
   //open the file in the specified mode
-  if( open(this, mode) == -1 ){
+  if( diskFileOpen(this, mode) == -1 ){
     printf("Error: Failed to open file\n");
     secureFree(&this->fullPath, fullPathBytesize);
     secureFree(&this, sizeof(struct diskFile));
@@ -93,8 +95,8 @@ diskFile* newDiskFile(char* path, char* name, char* mode)
   
 
   //initialize public methods
-  this->write         = &write;
-  this->read          = &read; 
+  this->diskFileWrite         = &diskFileWrite;
+  this->diskFileRead          = &diskFileRead; 
   this->closeTearDown = &closeTearDown;
   this->getBytesize   = &getBytesize; 
   
@@ -158,7 +160,7 @@ static void closeTearDown(diskFile** thisPointer)
 }
 
 //returns 0 on error
-static int write(diskFile* this, dataContainer* dataContainer) 
+static int diskFileWrite(diskFile* this, dataContainer* dataContainer) 
 {
   if(!fileModeWritable(this->mode)){
     printf("Error: File is not in a writable mode\n");
@@ -182,7 +184,7 @@ static int write(diskFile* this, dataContainer* dataContainer)
 
 
 //returns NULL on error
-static dataContainer* read(diskFile* this)
+static dataContainer* diskFileRead(diskFile* this)
 {
   dataContainer *dataContainer; 
   long int      fileBytesize;
@@ -228,7 +230,7 @@ static dataContainer* read(diskFile* this)
 /******** PRIVATE METHODS *********/
 
 //returns -1 on error
-static int open(diskFile* this, char* mode)
+static int diskFileOpen(diskFile* this, char* mode)
 {
   this->descriptor = fopen( (const char*)this->fullPath, mode );
   
