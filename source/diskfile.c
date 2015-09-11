@@ -271,7 +271,7 @@ static int fileModeSeekable(char* mode)
 
 static int fileModeReadable(char* mode)
 {
-  if( !memcmp(mode, "r", 1) | !memcmp(mode, "a", 1) | !memcmp(mode, "r+", 2) | !memcmp(mode, "w+", 2) | !memcmp(mode, "a+", 2) ){
+  if( !memcmp(mode, "r", 1) | !memcmp(mode, "r+", 2) | !memcmp(mode, "w+", 2) | !memcmp(mode, "a+", 2) ){
    return 1; 
   }
   return 0; 
