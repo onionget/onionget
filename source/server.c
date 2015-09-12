@@ -63,7 +63,7 @@ server* newServer(int argc, char *argv[])
   this->sharedFolderPathBytesize = strlen(this->sharedFolderPath); 
   this->bindAddress              = argv[1];
   this->listenPort               = (int)      strtoll(argv[2], NULL, 10); 
-  this->maxMemoryCache           = (uint64_t) strtoll(argv[4], NULL, 10); 
+  this->maxMemoryCacheBytesize   = (uint64_t) strtoll(argv[4], NULL, 10); 
   
   this->cachedSharedFiles = newDll();
   if(this->cachedSharedFiles == NULL){
@@ -288,7 +288,7 @@ int cacheSharedFiles(server* this)
     }
     
     //if adding the file to the cache will exhaust the cache space then skip it and try the next file
-    if( (currentlyCachedBytes + currentFileBytesize) > this->maxMemoryCache ){
+    if( (currentlyCachedBytes + currentFileBytesize) > this->maxMemoryCacheBytesize ){
       printf("Notice: Adding file %s will exhaust available cache, skipping\n", fileEntry->d_name); 
       diskFile->closeTearDown(&diskFile);
       continue; 

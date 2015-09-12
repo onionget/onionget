@@ -6,7 +6,7 @@ typedef struct server{
   int      sharedFolderPathBytesize;
   char     *bindAddress;
   int      listenPort;
-  uint64_t maxMemoryCache; 
+  uint64_t maxMemoryCacheBytesize; 
   dll      *cachedSharedFiles;  
   router  *listeningRouter; 
   
