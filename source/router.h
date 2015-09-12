@@ -14,7 +14,7 @@ typedef struct router{
   int (*ipv4Connect)(struct router* this, char* address, char* port);
   int (*ipv4Listen)(struct router* this, char* address, int port);
   int  (*getConnection)(struct router* this);
-  void  (*setSocket)(struct router* this, int socket);
+  int  (*setSocket)(struct router* this, int socket);
   int (*destroyRouter)(struct router** thisPointer); 
 }router;
 

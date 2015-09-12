@@ -15,7 +15,7 @@ static int diskFileWrite(diskFile* this, dataContainer* dataContainer);
 static dataContainer* diskFileRead(diskFile* this);
 
 
-static void closeTearDown(diskFile** thisPointer);
+static int closeTearDown(diskFile** thisPointer);
 static long int getBytesize(diskFile* this);
 
 
@@ -34,9 +34,22 @@ diskFile* newDiskFile(char* path, char* name, char* mode)
   uint32_t  pathBytesize;
   uint32_t  nameBytesize;
   uint32_t fullPathBytesize; 
+  int      valid;
+  
+  if( path == NULL || name == NULL || mode == NULL ){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return NULL; 
+  }
   
   //sanity check
-  if( !fileModeValid(mode) ){
+  valid = fileModeValid(mode);
+  
+  if(valid == -1){
+    printf("Error: Failed to check if file mode valid\n");
+    return NULL; 
+  }
+  
+  if(!valid){
     printf("Error: Invalid file mode specified\n");
     return NULL;
   }
@@ -95,8 +108,8 @@ diskFile* newDiskFile(char* path, char* name, char* mode)
   
 
   //initialize public methods
-  this->diskFileWrite         = &diskFileWrite;
-  this->diskFileRead          = &diskFileRead; 
+  this->diskFileWrite = &diskFileWrite;
+  this->diskFileRead  = &diskFileRead; 
   this->closeTearDown = &closeTearDown;
   this->getBytesize   = &getBytesize; 
   
@@ -115,8 +128,21 @@ diskFile* newDiskFile(char* path, char* name, char* mode)
 static long int getBytesize(diskFile* this)
 {
   long int fileBytesize; 
+  int seekable;
   
-  if(!fileModeSeekable(this->mode)){
+  if( this == NULL ){
+    printf("Error: Something was NULL that shouldn't have been");
+    return -1; 
+  }
+  
+  seekable = fileModeSeekable(this->mode);
+  
+  if(seekable == -1){
+    printf("Error: Failed to check if file mode seekable\n");
+    return -1; 
+  }
+  
+  if(!seekable){
     printf("Error: File is not in a mode that lets us get its bytesize\n");
     return -1; 
   }
@@ -143,26 +169,59 @@ static long int getBytesize(diskFile* this)
 
 
 //closes the file descriptor if it is open and destroys the struct (not named destroy because it doesn't destroy the file and might be confusing)
-static void closeTearDown(diskFile** thisPointer)
+//returns 0 on error
+static int closeTearDown(diskFile** thisPointer)
 {
   diskFile *this;
   
   this = *thisPointer; 
   
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
+  
   if(this->descriptor != NULL){
     if( fclose(this->descriptor) == EOF ){
       printf("Error: Failed to close file descriptor\n"); 
+      return 0;
     }
   }
     
-  secureFree( &(this->fullPath), this->fullPathBytesize); 
-  secureFree(thisPointer, sizeof(struct diskFile)); 
+  if( !secureFree( &(this->fullPath), this->fullPathBytesize) ){
+    printf("Error: Failed to free path\n");
+    return 0;
+  }
+  
+  
+  if( !secureFree(thisPointer, sizeof(struct diskFile)) ){
+    printf("Error: Failed to tear down disk file\n");
+    return 0;
+  }
+  
+  
+  return 1; 
 }
 
 //returns 0 on error
 static int diskFileWrite(diskFile* this, dataContainer* dataContainer) 
 {
-  if(!fileModeWritable(this->mode)){
+  int writable;
+  
+  if(this == NULL || dataContainer == NULL){
+    printf("Error: Something was NULL that shouldn't have been");
+    return 0;
+  }
+  
+  
+  writable = fileModeWritable(this->mode);
+  
+  if(writable == -1){
+    printf("Error: Failed to check if file mode is writable\n");
+    return 0;
+  }
+  
+  if(!writable){
     printf("Error: File is not in a writable mode\n");
     return 0;
   }
@@ -188,8 +247,21 @@ static dataContainer* diskFileRead(diskFile* this)
 {
   dataContainer *dataContainer; 
   long int      fileBytesize;
+  int           readable; 
   
-  if(!fileModeReadable(this->mode)){
+  if( this == NULL ){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return NULL; 
+  }
+  
+  readable = fileModeReadable(this->mode);
+  
+  if(readable == -1){
+    printf("Error: Failed to check if file mode is readable\n");
+    return NULL; 
+  }
+  
+  if(!readable){
     printf("Error: File is not in a readable mode\n");
     return NULL; 
   }
@@ -232,6 +304,11 @@ static dataContainer* diskFileRead(diskFile* this)
 //returns -1 on error
 static int diskFileOpen(diskFile* this, char* mode)
 {
+  if( this == NULL || mode == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return -1;
+  }
+  
   this->descriptor = fopen( (const char*)this->fullPath, mode );
   
   if(this->descriptor == NULL){
@@ -245,32 +322,56 @@ static int diskFileOpen(diskFile* this, char* mode)
 }
 
 
+//returns -1 on error
 static int fileModeValid(char* mode)
 {
+  if(mode == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return -1; 
+  }
+  
   if(  !memcmp(mode, "w", 1) | !memcmp(mode, "a", 1) | !memcmp(mode, "r+", 2) | !memcmp(mode, "w+", 2) | !memcmp(mode, "a+", 2) | !memcmp(mode, "r", 1) ){
     return 1; 
   } 
   return 0; 
 }
 
+//returns -1 on error
 static int fileModeWritable(char* mode)
 {
+  if(mode == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return -1; 
+  }
+  
   if(  !memcmp(mode, "w", 1) | !memcmp(mode, "a", 1) | !memcmp(mode, "r+", 2) | !memcmp(mode, "w+", 2) | !memcmp(mode, "a+", 2) ){
    return 1; 
   }
   return 0; 
 }
 
+//returns -1 on error
 static int fileModeSeekable(char* mode)
 {
+  if(mode == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return -1; 
+  }
+  
   if( !memcmp(mode, "w", 1) | !memcmp(mode, "r+", 2) | !memcmp(mode, "w+", 2) | !memcmp(mode, "r", 1) ){
     return 1;
   }
   return 0;
 }
 
+//returns -1 on error
 static int fileModeReadable(char* mode)
 {
+  if(mode == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return -1; 
+  }
+  
   if( !memcmp(mode, "r", 1) | !memcmp(mode, "r+", 2) | !memcmp(mode, "w+", 2) | !memcmp(mode, "a+", 2) ){
    return 1; 
   }

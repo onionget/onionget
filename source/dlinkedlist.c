@@ -32,12 +32,20 @@ dll* newDll()
   return this;
 }
 
+//returns NULL on error or item not in list
 dataContainer* getId(dll* this, char* id, uint64_t idBytesize)
 {
   dllObject* currentObject;
   
+  if(this == NULL || id == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return NULL; 
+  }
+  
   for(currentObject = this->head; currentObject != NULL; currentObject = currentObject->next){
-    if( !memcmp(currentObject->identifier, id, idBytesize) ) return currentObject->dataContainer; 
+    if( !memcmp(currentObject->identifier, id, idBytesize) ){
+      return currentObject->dataContainer;
+    }
   }
    
   return NULL; 
@@ -47,6 +55,11 @@ dataContainer* getId(dll* this, char* id, uint64_t idBytesize)
 static int insert(dll* this, int end, char* id, uint64_t idBytesize, dataContainer* dataContainer)
 {
   dllObject *object;
+  
+  if(this == NULL || id == NULL || dataContainer == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0; 
+  }
 
   if(end != DLL_HEAD && end != DLL_TAIL){
     printf("Error: end must be DLL_HEAD or DLL_TAIL\n");

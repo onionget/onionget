@@ -24,7 +24,7 @@ static int getFiles(client* this, int argc, char *argv[]);
 static int executeOperation(client* this, int argc, char* argv[]);
 
 
-
+/*
 int main(int argc, char *argv[])
 {
   client *client;
@@ -40,6 +40,7 @@ int main(int argc, char *argv[])
     
   return 0; 
 }
+*/
 
 
 
@@ -103,6 +104,10 @@ client* newClient(int argc, char* argv[])
 //return 0 on error and 1 on success
 static int executeOperation(client* this, int argc, char* argv[])
 {
+  if( this == NULL ){
+    return 0; 
+  }
+  
   if  (   !strcmp(this->operation, "--get")  ) return this->getFiles(this, argc, argv);
   else                                         return showHelp();  
 }
@@ -116,6 +121,11 @@ static int getFiles(client* this, int argc, char *argv[])
   uint32_t      incomingFileBytesize;
   diskFile      *diskFile;
   dataContainer *incomingFile; 
+  
+  if( this == NULL ){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
   
   if( !this->router->transmitBytesize(this->router, this->fileRequestString->bytesize) ){
     printf("Error: Failed to transmit request string\n");
@@ -154,8 +164,16 @@ static int getFiles(client* this, int argc, char *argv[])
       return 0;
     }
     
-    incomingFile->destroyDataContainer(&incomingFile);  
-    diskFile->closeTearDown(&diskFile); 
+    if( !incomingFile->destroyDataContainer(&incomingFile) ){
+      printf("Error: Failed to destroy data container\n");
+      return 0; 
+    }
+    
+    if( !diskFile->closeTearDown(&diskFile) ){
+      printf("Error: Failed to tear down disk file\n");
+      return 0;
+    }
+    
   }
   
   return 1; 
@@ -178,7 +196,7 @@ static uint32_t calculateFileRequestStringBytesize(int argc, char* argv[])
   return fileRequestStringBytesize;
 }
 
-
+//returns 0 on error
 static int prepareFileRequestString(client* this, int argc, char* argv[])
 {
   uint32_t       fileRequestStringBytesize; 
@@ -186,6 +204,11 @@ static int prepareFileRequestString(client* this, int argc, char* argv[])
   uint32_t       currentFile; 
   uint32_t       currentWriteLocation; 
   uint32_t       sectionBytesize; 
+  
+  if(this == NULL){
+    printf("Error: something was NULL that shouldn't have been\n"); 
+    return 0;
+  }
   
   filesRequested            = argc - FIRST_FILE_POSITION;
   currentFile               = FIRST_FILE_POSITION;
@@ -216,6 +239,11 @@ static int prepareFileRequestString(client* this, int argc, char* argv[])
 static int establishConnection(client* this)
 {
  
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been"); 
+    return 0;
+  }
+  
   if(!this->router->ipv4Connect(this->router, this->torBindAddress, this->torPort)){
     printf("Error: Failed to connect client\n");
     return 0;
@@ -229,8 +257,15 @@ static int establishConnection(client* this)
   return 1; 
 }
 
+//returns 0 on error
 static int sanityCheck(int argc, char* secondArgument, char* onionPort, char* onionAddress)
 {  
+  
+  if( secondArgument == NULL || onionPort == NULL || onionAddress == NULL ){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
+  
   if( strlen(onionPort) > 5 || strtol(onionPort, NULL, 10) > 65535){
    printf("Error: Port of destination must be at or below 65535\n");
    return 0; 

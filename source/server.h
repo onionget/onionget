@@ -10,7 +10,7 @@ typedef struct server{
   dll      *cachedSharedFiles;  
   router  *listeningRouter; 
   
-  void (*serverListen)(struct server* this); 
+  int (*serverListen)(struct server* this); 
 }server;
 
 typedef struct activeConnection{

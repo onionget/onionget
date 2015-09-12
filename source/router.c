@@ -32,7 +32,7 @@ static int socks5Connect(router* this, char* destAddress, uint8_t destAddressByt
 static int transmitBytesize(router *this, uint32_t bytesize);
 static uint32_t getIncomingByteize(router *this); //note that this only gets incoming bytesize if the incoming bytesize is actually sent, as a uint32_t 
 static int ipv4Connect(router* this, char* address, char* port);
-static void setSocket(router* this, int socket);
+static int setSocket(router* this, int socket);
 
 
 static int ipv4Listen(router* this, char* address, int port);
@@ -69,17 +69,24 @@ router* newRouter()
 }
 
 
-
+//returns 0 on error
 static int destroyRouter(router** thisPointer)
 {
-  router *this = *thisPointer;
+  router *this;
+ 
+  this = *thisPointer;
+  
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been");
+    return 0;
+  }
   
   if( close(this->socket) != 0 ){
     printf("Error: Failed to close socket\n");
     return 0; 
   }
   
-  secureFree(thisPointer, sizeof(router)); 
+  secureFree(thisPointer, sizeof(struct router)); 
   return 1; 
 }
 
@@ -92,6 +99,11 @@ static dataContainer* receive(router* this, uint32_t payloadBytesize)
   dataContainer   *receivedMessage;
   uint32_t        bytesReceived;
   uint32_t        recvReturn;
+  
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been");
+    return NULL; 
+  }
   
   receivedMessage = newDataContainer(payloadBytesize);
   if(receivedMessage == NULL){
@@ -117,6 +129,11 @@ static uint32_t getIncomingByteize(router *this)
   uint32_t      incomingBytesize;
   dataContainer *incomingBytesizeContainer;
   
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return -1; 
+  }
+  
   incomingBytesizeContainer = this->receive(this, sizeof(uint32_t));
   if(incomingBytesizeContainer == NULL){
     printf("Error: Failed to get incoming bytesize\n");
@@ -125,7 +142,10 @@ static uint32_t getIncomingByteize(router *this)
   
   incomingBytesize = *((uint32_t*)incomingBytesizeContainer->data);
   
-  incomingBytesizeContainer->destroyDataContainer(&incomingBytesizeContainer);
+  if( !incomingBytesizeContainer->destroyDataContainer(&incomingBytesizeContainer) ){
+    printf("Error: Failed to destroy data container\n");
+    return -1; 
+  }
   
   
   return ntohl(incomingBytesize);
@@ -136,6 +156,11 @@ static int transmit(router* this, void* payload, uint32_t payloadBytesize)
 {
   uint32_t sentBytes;  
   uint32_t sendReturn;
+  
+  if(this == NULL || payload == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
   
   for(sentBytes = 0, sendReturn = 0; sentBytes != payloadBytesize; sentBytes += sendReturn){
     sendReturn = send(this->socket, payload, payloadBytesize - sentBytes, 0); //TODO not current keeping track of buffer position
@@ -151,7 +176,14 @@ static int transmit(router* this, void* payload, uint32_t payloadBytesize)
 //returns 0 on error
 static int transmitBytesize(router *this, uint32_t bytesize)
 {
-  uint32_t bytesizeEncoded = htonl(bytesize);
+  uint32_t bytesizeEncoded;
+  
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
+  
+  bytesizeEncoded = htonl(bytesize);
   
   if( !this->transmit(this, &bytesizeEncoded, sizeof(uint32_t)) ){
     printf("Error: Failed to transmit bytesize\n");
@@ -169,6 +201,11 @@ static int socks5Connect(router* this, char* destAddress, uint8_t destAddressByt
   dataContainer *socksRequest;
   dataContainer *proxyResponse;
   int           requestBytesize;
+  
+  if(this == NULL || destAddress == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
 
   //desired destination port in network octet order
   destPort = htons(destPort);
@@ -197,7 +234,10 @@ static int socks5Connect(router* this, char* destAddress, uint8_t destAddressByt
     return 0; 
   }
   
-  proxyResponse->destroyDataContainer(&proxyResponse); 
+  if( !proxyResponse->destroyDataContainer(&proxyResponse) ){
+    printf("Error: Failed to destroy data container\n");
+    return 0;
+  }
   
  /* CLIENT REQUEST FORMAT
   * 
@@ -235,7 +275,10 @@ static int socks5Connect(router* this, char* destAddress, uint8_t destAddressByt
     return 0;
   }
   
-  socksRequest->destroyDataContainer(&socksRequest); 
+  if( !socksRequest->destroyDataContainer(&socksRequest) ){
+    printf("Error: Failed to destroy data container\n");
+    return 0; 
+  }
   
   
  /* PROXY RESPONSE FORMAT
@@ -262,7 +305,10 @@ static int socks5Connect(router* this, char* destAddress, uint8_t destAddressByt
     return 0; 
   }
   
-  proxyResponse->destroyDataContainer(&proxyResponse); 
+  if( !proxyResponse->destroyDataContainer(&proxyResponse) ){
+    printf("Error: Failed to destroy datacontainer\n");
+    return 0;
+  }
   
   return 1; 
 }
@@ -273,6 +319,11 @@ static int ipv4Connect(router* this, char* address, char* port)
   struct addrinfo connectionInformation;
   struct addrinfo *encodedAddress;
   struct timeval  recvTimeout;
+  
+  if(this == NULL || address == NULL || port == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
   
   connectionInformation.ai_family    = AF_INET;
   connectionInformation.ai_socktype  = SOCK_STREAM;
@@ -287,7 +338,12 @@ static int ipv4Connect(router* this, char* address, char* port)
     return 0; 
   }
   
-  this->setSocket( this, socket(AF_INET, SOCK_STREAM, 0) );
+  if( !this->setSocket( this, socket(AF_INET, SOCK_STREAM, 0) ) ){
+    printf("Error: Failed to set socket\n");
+    return 0;
+  }
+  
+  
   if(this->socket == -1){
     printf("Error: Failed to create new socket");
     return 0; 
@@ -321,6 +377,11 @@ int ipv4Listen(router* this, char* address, int port)
 {
   struct sockaddr_in bindInfo;
   struct in_addr     formattedAddress;
+  
+  if(this == NULL || address == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
   
   if(this->socket != -1){
     printf("Error: Router already in use\n");
@@ -359,7 +420,12 @@ int ipv4Listen(router* this, char* address, int port)
 //returns -1 on error
 static int getConnection(router* this)
 {
-   if(this->socket == -1){
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return -1; 
+  }
+  
+  if(this->socket == -1){
     printf("Error: Socket not initialized, can't accept\n");
     return -1; 
   }
@@ -367,7 +433,14 @@ static int getConnection(router* this)
   return accept(this->socket, NULL, NULL); 
 }
 
-static void setSocket(router* this, int socket)
+//returns 0 on error
+static int setSocket(router* this, int socket)
 {
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been");
+    return 0;
+  }
+  
   this->socket = socket; 
+  return 1;
 }

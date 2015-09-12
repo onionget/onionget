@@ -10,7 +10,7 @@ typedef struct diskFile{
   
   int (*diskFileWrite)(struct diskFile* this, dataContainer* dataContainer);
   dataContainer *(*diskFileRead)(struct diskFile* this); 
-  void (*closeTearDown)(struct diskFile** thisPointer); 
+  int (*closeTearDown)(struct diskFile** thisPointer); 
   long int (*getBytesize)(struct diskFile* this);
 }diskFile; 
 

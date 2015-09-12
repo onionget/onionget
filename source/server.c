@@ -21,13 +21,13 @@ enum{  MAX_REQUEST_STRING_BYTESIZE = 1000000   };
 
 static void* processConnection(void* activeConnectionV);
 int cacheSharedFiles(server* this);
-static void serverListen(server* this);
+static int serverListen(server* this);
 
 
 //0         1               2               3                    4
 //[exe] [server address] [server port] [shared folder path] [memory cache size] 
 
-/*
+
 int main(int argc, char *argv[])
 {
   server *server;
@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
   server->serverListen(server);
   return 0; 
 }
-*/
+
 
 
 server* newServer(int argc, char *argv[])
@@ -100,11 +100,16 @@ server* newServer(int argc, char *argv[])
 
 /************ PUBLIC METHODS *************/
 
-static void serverListen(server* this)
+//returns 0 on error, otherwise doesn't return
+static int serverListen(server* this)
 {
   pthread_t        processingThread;
   activeConnection *activeConnection;
   
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
   
   while(1){  
     activeConnection = secureAllocate(sizeof(struct activeConnection)); 
@@ -122,10 +127,24 @@ static void serverListen(server* this)
     
     activeConnection->server = this;
     
-    activeConnection->connectedRouter->setSocket( activeConnection->connectedRouter, this->listeningRouter->getConnection(this->listeningRouter) );  
+    if( !activeConnection->connectedRouter->setSocket( activeConnection->connectedRouter, this->listeningRouter->getConnection(this->listeningRouter) ) ){
+      printf("Error: Failed to set active connection router socket\n");
+      return 0;
+    }
+  
+    
     if( pthread_create(&processingThread, NULL, processConnection, (void*)activeConnection) ){
-      activeConnection->connectedRouter->destroyRouter(&activeConnection->connectedRouter);
-      secureFree(&activeConnection, sizeof(struct activeConnection)); 
+      
+      if( !activeConnection->connectedRouter->destroyRouter(&activeConnection->connectedRouter) ){
+	printf("Error: Failed to destroy router object\n");
+	return 0;
+      }
+     
+      if( !secureFree(&activeConnection, sizeof(struct activeConnection)) ){
+	printf("Error: Failed to free activeConnection object\n");
+	return 0;
+      }
+   
       continue;
     }
   }
@@ -149,6 +168,11 @@ static void* processConnection(void* activeConnectionV)
   uint32_t         currentSectionBytesize;
   char             *currentSection;
 
+  if(activeConnectionV == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return NULL; 
+  }
+  
   currentSection = NULL; 
   
   activeConnection = activeConnectionV; //TODO why doesn't casting this work
@@ -211,8 +235,15 @@ static void* processConnection(void* activeConnectionV)
     }
   }
   
-  secureFree(&activeConnection, sizeof(struct activeConnection)); 
-  connectedRouter->destroyRouter(&connectedRouter);   
+  if( !secureFree(&activeConnection, sizeof(struct activeConnection)) ){
+    printf("Error: Failed to free activeConnection object\n");
+    return NULL; 
+  }
+ 
+  if( !connectedRouter->destroyRouter(&connectedRouter) ){
+    printf("Error: Failed to destroy router object\n");
+    return NULL; 
+  }
 
   return NULL; 
 }
@@ -226,6 +257,11 @@ int cacheSharedFiles(server* this)
   struct dirent *fileEntry; 
   diskFile      *diskFile; 
   long int      currentFileBytesize; 
+  
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
    
   directory = opendir( (const char*) this->sharedFolderPath );
   if(directory == NULL){
@@ -264,7 +300,10 @@ int cacheSharedFiles(server* this)
     }
     
     currentlyCachedBytes += currentFileBytesize;
-    diskFile->closeTearDown(&diskFile);
+    if(!diskFile->closeTearDown(&diskFile)){
+      printf("Error: Failed to close the disk file\n");
+      return 0; 
+    }
   }
   
   return 1; 

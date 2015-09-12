@@ -6,7 +6,7 @@
 #include "datacontainer.h"
 #include "memorymanager.h"
 
-static void destroyDataContainer(dataContainer** thisPointer);
+static int destroyDataContainer(dataContainer** thisPointer);
 
 //returns null on error
 dataContainer* newDataContainer(uint64_t bytesize)
@@ -36,13 +36,30 @@ dataContainer* newDataContainer(uint64_t bytesize)
   return this;
 }
 
-
-static void destroyDataContainer(dataContainer** thisPointer)
+//returns 0 on error
+static int destroyDataContainer(dataContainer** thisPointer)
 {
   dataContainer  *this;
   
   this = *thisPointer;   
   
-  secureFree( &(this->data), this->bytesize );
-  secureFree(thisPointer, sizeof(struct dataContainer));
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
+  
+  if( this->data != NULL ){
+    if(!secureFree( &(this->data), this->bytesize ) ){
+      printf("Error: Failed to free dataContainer data\n");
+      return 0;      
+    }
+  }
+  
+  if( !secureFree(thisPointer, sizeof(struct dataContainer)) ){
+    printf("Error: Failed to free data container object\n");
+    return 0; 
+  }
+  
+  
+  return 1; 
 }

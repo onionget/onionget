@@ -18,11 +18,16 @@ void* secureAllocate(uint64_t bytesize)
 }
 
 //note: memory must be a void**
-void secureFree(void* memory, uint64_t bytesize)
+int secureFree(void* memory, uint64_t bytesize)
 {
   volatile unsigned char *deoptimizedDataPointer;
   unsigned char          *dataBuffer;
   void                   **memoryCorrectCast;
+  
+  if(memory == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
   
   memoryCorrectCast = (void**)memory; 
   
@@ -35,4 +40,6 @@ void secureFree(void* memory, uint64_t bytesize)
   free(dataBuffer);
   
   *memoryCorrectCast = NULL; 
+  
+  return 1; 
 }
