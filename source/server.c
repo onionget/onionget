@@ -26,7 +26,7 @@ static int serverListen(server* this);
 
 
 //0         1               2               3                    4
-//[exe] [server address] [server port] [shared folder path] [memory cache size] 
+//[exe] [server address] [server port] [shared folder path] [memory cache megabyte size] 
 
 
 int main(int argc, char *argv[])
