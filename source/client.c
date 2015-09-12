@@ -191,8 +191,10 @@ static uint32_t calculateFileRequestStringBytesize(int argc, char* argv[])
   filesRequested = argc - FIRST_FILE_POSITION;
   currentFile    = FIRST_FILE_POSITION;
   
-  for( fileRequestStringBytesize = 0 ; filesRequested-- ; currentFile++ ) fileRequestStringBytesize += strlen(argv[currentFile]) + DELIMITER_BYTESIZE;
-     
+  for( fileRequestStringBytesize = 0 ; filesRequested-- ; currentFile++ ){
+    fileRequestStringBytesize += strlen(argv[currentFile]) + DELIMITER_BYTESIZE;
+  }
+  
   return fileRequestStringBytesize;
 }
 

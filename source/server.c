@@ -269,7 +269,7 @@ int cacheSharedFiles(server* this)
     return 0;
   }
   
-  for(currentlyCachedBytes = 0 ; ( fileEntry = readdir(directory) ); ){
+  for( currentlyCachedBytes = 0 ; ( fileEntry = readdir(directory) ); {} ){
    
     if( !strcmp(fileEntry->d_name, ".") || !strcmp(fileEntry->d_name, "..") ){
       continue;
