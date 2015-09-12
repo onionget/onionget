@@ -17,6 +17,7 @@
 
 enum{  TERMINATING_NULL_HOP        = 1         };
 enum{  MAX_REQUEST_STRING_BYTESIZE = 1000000   };
+enum{  BYTES_IN_A_MEGABYTE         = 1000000   }; 
 
 
 static void* processConnection(void* activeConnectionV);
@@ -63,7 +64,7 @@ server* newServer(int argc, char *argv[])
   this->sharedFolderPathBytesize = strlen(this->sharedFolderPath); 
   this->bindAddress              = argv[1];
   this->listenPort               = (int)      strtoll(argv[2], NULL, 10); 
-  this->maxMemoryCacheBytesize   = (uint64_t) strtoll(argv[4], NULL, 10); 
+  this->maxMemoryCacheBytesize   = (uint64_t) strtoll(argv[4], NULL, 10) * BYTES_IN_A_MEGABYTE; 
   
   this->cachedSharedFiles = newDll();
   if(this->cachedSharedFiles == NULL){
