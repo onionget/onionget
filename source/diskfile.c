@@ -46,7 +46,6 @@ diskFile *newDiskFile(char *path, char *name, char *mode)
     return NULL; 
   }
     
-
   //allocate memory for the object
   this = secureAllocate(sizeof(struct diskFile)); 
   if(this == NULL){
@@ -54,12 +53,10 @@ diskFile *newDiskFile(char *path, char *name, char *mode)
     return NULL; 
   }
   
-  
   if( !initializePathProperties(this, path, name) ){
     printf("Error: Failed to initialize diskFile path\n");
     return NULL; 
   }
-  
   
   //open the file in the specified mode
   if( !diskFileOpen(this, mode) ){
@@ -69,7 +66,6 @@ diskFile *newDiskFile(char *path, char *name, char *mode)
     return NULL;
   }
   
-
   //initialize public methods
   this->diskFileWrite = &diskFileWrite;
   this->diskFileRead  = &diskFileRead; 
@@ -177,11 +173,13 @@ static int diskFileWrite(diskFile *this, dataContainer *dataContainer)
     return 0;
   }
   
-  //TODO look more at error checking TODO also don't try to write the entire file at once!!
+
+  //TODO look more at error checking TODO also don't try to write the entire file at once (ie: don't get it all at once and then write it, loop from client)!!
   if( fwrite( (const void*)dataContainer->data, dataContainer->bytesize, COUNT, this->descriptor) != COUNT ){
     printf("Error: didn't write all data to file\n");
     return 0; 
   }
+  
   
   return 1; 
 }

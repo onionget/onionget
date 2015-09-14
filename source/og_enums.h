@@ -31,6 +31,7 @@ enum{  ONION_ADDRESS_BYTESIZE = 22  };
 //client
 
 enum{  DELIMITER_BYTESIZE     = 1   };
+enum{  FILE_CHUNK_BYTESIZE    = 1000000 }; 
 
 
 //diskfile

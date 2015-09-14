@@ -19,8 +19,7 @@ static int            establishConnection(client *this);
 static int            prepareFileRequestString(client *this);
 static uint32_t       calculateFileRequestStringBytesize(client *this);
 static int            sendRequestString(client *this);
-static dataContainer  *getIncomingFile(client *this);
-static int            writeFileToDisk(client *this, char *fileName, dataContainer *fileData);
+static int            getIncomingFile(client *this, char* fileName);
 
 
 
@@ -113,7 +112,6 @@ static int getFiles(client *this)
 {
   int           currentFile;
   uint32_t      fileCount; 
-  dataContainer *incomingFile; 
   
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -128,26 +126,10 @@ static int getFiles(client *this)
     
   //get the files from the server
   for(fileCount = this->fileCount, currentFile = 0; fileCount--; currentFile++){ 
-
-    //first get the incoming file
-    incomingFile = getIncomingFile(this);
-    if(incomingFile == NULL){
-      printf("Error: Failed to receive incoming file\n");
+    if( !getIncomingFile(this, this->fileNames[currentFile]) ){
+      printf("Error: Failed to get file\n");
       return 0; 
     }
-    
-    //then write it to the disk
-    if( !writeFileToDisk(this, this->fileNames[currentFile], incomingFile) ){
-      printf("Error: Failed to write file to disk\n");
-      return 0;
-    }
-    
-    //then destroy the data container that holds the current file in RAM
-    if( !incomingFile->destroyDataContainer(&incomingFile) ){
-      printf("Error: Failed to destroy data container\n");
-      return 0; 
-    }
-    
   }
   
   return 1; 
@@ -157,71 +139,79 @@ static int getFiles(client *this)
 
 /************* PRIVATE METHODS ****************/ 
 
+
+
 /*
- * writeFileToDisk returns 0 on error and 1 on success
- * it writes the current file to the disk 
- */
-static int writeFileToDisk(client *this, char *fileName, dataContainer *fileData)
+ * getIncomingFile returns NULL on error and a dataContainer with the received file on success
+ */ 
+static int getIncomingFile(client *this, char* fileName)
 {
-  diskFile *diskFile;
+  dataContainer *incomingFileChunk;
+  uint32_t      incomingFileBytesize;
+  diskFile      *diskFile;
+  uint64_t      bytesToGet; 
   
-  if(this == NULL || fileName == NULL || fileData == NULL){
+  
+  if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0; 
   }
   
-  //we instantiate a new diskFile object to write the received file to the disk
+  
+  //first we open a new diskFile to write the file to
   diskFile = newDiskFile(this->dirPath, fileName, "w");
   if(diskFile == NULL){
     printf("Error: Failed to create file on disk, aborting\n");
     return 0;
   }
-    
-  //then we write the received file to the disk
-  if( !diskFile->diskFileWrite(diskFile, fileData) ){
-    printf("Error: Failed to write file to disk, aborting\n");
+  
+  
+
+  //then the server sends us the incoming files bytesize
+  incomingFileBytesize = this->router->getIncomingBytesize(this->router); 
+  if(incomingFileBytesize == -1){
+    printf("Error: Failed to get incoming file bytesize, aborting\n");
     return 0;
   }
+  
+   
+  //next we get the incoming file from the server in incomingFileChunkBytesize chunks, until there are no more chunks
+  
+  for(bytesToGet = 0 ; incomingFileBytesize ; incomingFileBytesize -=  bytesToGet){
     
+    //if the remainder of the file is less than or equal to FILE_CHUNK_BYTESIZE then get all of it. Otherwise get FILE_CHUNK_BYTESIZE of it
+    if       ( incomingFileBytesize <= FILE_CHUNK_BYTESIZE ) bytesToGet = incomingFileBytesize;
+    else if  ( incomingFileBytesize >  FILE_CHUNK_BYTESIZE ) bytesToGet = FILE_CHUNK_BYTESIZE % incomingFileBytesize;
+        
+    //get up to FILE_CHUNK_BYTESIZE bytes of the file
+    incomingFileChunk = this->router->receive(this->router,  bytesToGet);
+    if(incomingFileChunk == NULL){
+      printf("Error: Failed to receive data, aborting\n");
+      return 0; 
+    }
+        
+    //then write it to the disk
+    if( !diskFile->diskFileWrite(diskFile, incomingFileChunk) ){
+      printf("Error: Failed to write file to disk, aborting\n");
+      return 0;
+    }
+    
+    //then destroy the data container that holds the current file in RAM
+    if( !incomingFileChunk->destroyDataContainer(&incomingFileChunk) ){
+      printf("Error: Failed to destroy data container\n");
+      return 0; 
+    }
+    
+  }
+  
   //then we close the disk file and destroy the object
   if( !diskFile->closeTearDown(&diskFile) ){
     printf("Error: Failed to tear down disk file\n");
     return 0;
   }
   
+
   return 1; 
-}
-
-/*
- * getIncomingFile returns NULL on error and a dataContainer with the received file on success
- */
-static dataContainer *getIncomingFile(client *this)
-{
-  dataContainer *incomingFile;
-  uint32_t      incomingFileBytesize;
-  
-  
-  if(this == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
-    return NULL; 
-  }
-
-  //first the server sends us the incoming files bytesize
-  incomingFileBytesize = this->router->getIncomingBytesize(this->router); 
-  if(incomingFileBytesize == -1){
-    printf("Error: Failed to get incoming file bytesize, aborting\n");
-    return NULL;
-  }
-  
-  //next we get the incoming file from the server
-  incomingFile = this->router->receive(this->router, incomingFileBytesize);
-  if(incomingFile == NULL){
-    printf("Error: Failed to receive data, aborting\n");
-    return NULL; 
-  }
-  
-  //then we return the incoming file
-  return incomingFile; 
 }
 
 
