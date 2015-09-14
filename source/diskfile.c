@@ -11,24 +11,24 @@
 enum{ COUNT = 1 };
 
 //PUBLIC METHODS
-static int diskFileWrite(diskFile* this, dataContainer* dataContainer);
-static dataContainer* diskFileRead(diskFile* this);
+static int diskFileWrite(diskFile *this, dataContainer *dataContainer);
+static dataContainer* diskFileRead(diskFile *this);
 
 
-static int closeTearDown(diskFile** thisPointer);
-static long int getBytesize(diskFile* this);
+static int closeTearDown(diskFile **thisPointer);
+static long int getBytesize(diskFile *this);
 
 
 //PRIVATE METHODS
-static int diskFileOpen(diskFile* this, char* mode);
-static int fileModeReadable(char* mode);
-static int fileModeWritable(char* mode);
-static int fileModeValid(char* mode);
-static int fileModeSeekable(char* mode); 
+static int diskFileOpen(diskFile *this, char *mode);
+static int fileModeReadable(char *mode);
+static int fileModeWritable(char *mode);
+static int fileModeValid(char *mode);
+static int fileModeSeekable(char *mode); 
 
 
 //returns NULL on error
-diskFile* newDiskFile(char* path, char* name, char* mode)
+diskFile *newDiskFile(char *path, char *name, char *mode)
 {
   diskFile  *this;
   uint32_t  pathBytesize;
@@ -125,7 +125,7 @@ diskFile* newDiskFile(char* path, char* name, char* mode)
 /******** PUBLIC METHODS *********/
 
 //returns -1 on error
-static long int getBytesize(diskFile* this)
+static long int getBytesize(diskFile *this)
 {
   long int fileBytesize; 
   int seekable;
@@ -170,7 +170,7 @@ static long int getBytesize(diskFile* this)
 
 //closes the file descriptor if it is open and destroys the struct (not named destroy because it doesn't destroy the file and might be confusing)
 //returns 0 on error
-static int closeTearDown(diskFile** thisPointer)
+static int closeTearDown(diskFile **thisPointer)
 {
   diskFile *this;
   
@@ -204,7 +204,7 @@ static int closeTearDown(diskFile** thisPointer)
 }
 
 //returns 0 on error
-static int diskFileWrite(diskFile* this, dataContainer* dataContainer) 
+static int diskFileWrite(diskFile *this, dataContainer *dataContainer) 
 {
   int writable;
   
@@ -243,7 +243,7 @@ static int diskFileWrite(diskFile* this, dataContainer* dataContainer)
 
 
 //returns NULL on error
-static dataContainer* diskFileRead(diskFile* this)
+static dataContainer *diskFileRead(diskFile *this)
 {
   dataContainer *dataContainer; 
   long int      fileBytesize;
@@ -302,7 +302,7 @@ static dataContainer* diskFileRead(diskFile* this)
 /******** PRIVATE METHODS *********/
 
 //returns -1 on error
-static int diskFileOpen(diskFile* this, char* mode)
+static int diskFileOpen(diskFile *this, char *mode)
 {
   if( this == NULL || mode == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -323,7 +323,7 @@ static int diskFileOpen(diskFile* this, char* mode)
 
 
 //returns -1 on error
-static int fileModeValid(char* mode)
+static int fileModeValid(char *mode)
 {
   if(mode == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -337,7 +337,7 @@ static int fileModeValid(char* mode)
 }
 
 //returns -1 on error
-static int fileModeWritable(char* mode)
+static int fileModeWritable(char *mode)
 {
   if(mode == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -351,7 +351,7 @@ static int fileModeWritable(char* mode)
 }
 
 //returns -1 on error
-static int fileModeSeekable(char* mode)
+static int fileModeSeekable(char *mode)
 {
   if(mode == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -365,7 +365,7 @@ static int fileModeSeekable(char* mode)
 }
 
 //returns -1 on error
-static int fileModeReadable(char* mode)
+static int fileModeReadable(char *mode)
 {
   if(mode == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");

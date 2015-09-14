@@ -20,9 +20,9 @@ enum{  MAX_REQUEST_STRING_BYTESIZE = 1000000   };
 enum{  BYTES_IN_A_MEGABYTE         = 1000000   }; 
 
 
-static void* processConnection(void* activeConnectionV);
-int cacheSharedFiles(server* this);
-static int serverListen(server* this);
+static void *processConnection(void *activeConnectionV);
+int cacheSharedFiles(server *this);
+static int serverListen(server *this);
 
 
 //0         1               2               3                    4
@@ -86,7 +86,7 @@ server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uin
 /************ PUBLIC METHODS *************/
 
 //returns 0 on error, otherwise doesn't return
-static int serverListen(server* this)
+static int serverListen(server *this)
 {
   pthread_t        processingThread;
   activeConnection *activeConnection;
@@ -142,7 +142,7 @@ static int serverListen(server* this)
 /****************** PRIVATE METHODS *******************/
 
 
-static void* processConnection(void* activeConnectionV)
+static void *processConnection(void *activeConnectionV)
 {
   activeConnection *activeConnection;
   dataContainer    *outgoingFile; 
@@ -235,7 +235,7 @@ static void* processConnection(void* activeConnectionV)
 
 
 //returns 0 on error
-int cacheSharedFiles(server* this)
+int cacheSharedFiles(server *this)
 {
   uint64_t      currentlyCachedBytes;
   DIR           *directory; 

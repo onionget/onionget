@@ -8,11 +8,11 @@
 
 
 
-static int insert(dll* this, int end, char* id, uint64_t idBytesize, dataContainer* dataContainer);
-dataContainer* getId(dll* this, char* id, uint64_t idBytesize);
+static int insert(dll *this, int end, char *id, uint64_t idBytesize, dataContainer *dataContainer);
+dataContainer *getId(dll *this, char *id, uint64_t idBytesize);
 
 
-dll* newDll()
+dll* newDll(void)
 {
   dll *this;
   
@@ -33,9 +33,9 @@ dll* newDll()
 }
 
 //returns NULL on error or item not in list
-dataContainer* getId(dll* this, char* id, uint64_t idBytesize)
+dataContainer* getId(dll *this, char *id, uint64_t idBytesize)
 {
-  dllObject* currentObject;
+  dllObject *currentObject;
   
   if(this == NULL || id == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -52,7 +52,7 @@ dataContainer* getId(dll* this, char* id, uint64_t idBytesize)
 }
 
 //returns 0 on error
-static int insert(dll* this, int end, char* id, uint64_t idBytesize, dataContainer* dataContainer)
+static int insert(dll *this, int end, char *id, uint64_t idBytesize, dataContainer *dataContainer)
 {
   dllObject *object;
   

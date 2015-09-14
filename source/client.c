@@ -13,15 +13,15 @@
 enum{  DELIMITER_BYTESIZE     = 1   };
 enum{  ONION_ADDRESS_BYTESIZE = 22  };
 
-static int establishConnection(client* this);
-static int prepareFileRequestString(client* this);
-static uint32_t calculateFileRequestStringBytesize(client* this);
-static int getFiles(client* this);
-static int executeOperation(client* this);
+static int establishConnection(client *this);
+static int prepareFileRequestString(client *this);
+static uint32_t calculateFileRequestStringBytesize(client *this);
+static int getFiles(client *this);
+static int executeOperation(client *this);
 
 
 /******** CONSTRUCTOR ***********/
-client* newClient(char *torBindAddress, char *torPort, char *onionAddress, char *onionPort, char *operation, char *dirPath, char **fileNames, uint32_t fileCount)
+client *newClient(char *torBindAddress, char *torPort, char *onionAddress, char *onionPort, char *operation, char *dirPath, char **fileNames, uint32_t fileCount)
 {
   client *this; 
   
@@ -77,7 +77,7 @@ client* newClient(char *torBindAddress, char *torPort, char *onionAddress, char 
 /************ PUBLIC METHODS ******************/
 
 //return 0 on error and 1 on success
-static int executeOperation(client* this)
+static int executeOperation(client *this)
 {
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -90,7 +90,7 @@ static int executeOperation(client* this)
 
 
 
-static int getFiles(client* this)
+static int getFiles(client *this)
 {
   int           currentFilePosition;
   uint32_t      incomingFileBytesize;
@@ -179,7 +179,7 @@ static uint32_t calculateFileRequestStringBytesize(client *this)
 }
 
 //returns 0 on error
-static int prepareFileRequestString(client* this)
+static int prepareFileRequestString(client *this)
 {
   uint32_t   fileRequestStringBytesize; 
   uint32_t   currentFile; 
@@ -220,7 +220,7 @@ static int prepareFileRequestString(client* this)
 }
 
 
-static int establishConnection(client* this)
+static int establishConnection(client *this)
 {
  
   if(this == NULL){

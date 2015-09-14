@@ -6,7 +6,7 @@
 #include "datacontainer.h"
 #include "memorymanager.h"
 
-static int destroyDataContainer(dataContainer** thisPointer);
+static int destroyDataContainer(dataContainer **thisPointer);
 
 //returns null on error
 dataContainer* newDataContainer(uint64_t bytesize)
@@ -37,7 +37,7 @@ dataContainer* newDataContainer(uint64_t bytesize)
 }
 
 //returns 0 on error
-static int destroyDataContainer(dataContainer** thisPointer)
+static int destroyDataContainer(dataContainer **thisPointer)
 {
   dataContainer  *this;
   

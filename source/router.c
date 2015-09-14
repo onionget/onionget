@@ -26,25 +26,25 @@ enum{ RECEIVE_WAIT_TIMEOUT_USECS   = 0  };
 
 
 //public methods
-static dataContainer* receive(router* this, uint32_t payloadBytesize);
-static int transmit(router* this, void* payload, uint32_t payloadBytesize);
-static int socks5Connect(router* this, char* destAddress, uint8_t destAddressBytesize, uint16_t destPort);
+static dataContainer *receive(router *this, uint32_t payloadBytesize);
+static int transmit(router *this, void *payload, uint32_t payloadBytesize);
+static int socks5Connect(router *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort);
 static int transmitBytesize(router *this, uint32_t bytesize);
 static uint32_t getIncomingByteize(router *this); //note that this only gets incoming bytesize if the incoming bytesize is actually sent, as a uint32_t 
-static int ipv4Connect(router* this, char* address, char* port);
-static int setSocket(router* this, int socket);
+static int ipv4Connect(router *this, char *address, char *port);
+static int setSocket(router *this, int socket);
 
 
-static int ipv4Listen(router* this, char* address, int port);
-static int getConnection(router* this);
+static int ipv4Listen(router *this, char *address, int port);
+static int getConnection(router *this);
 
-static int destroyRouter(router** thisPointer);
+static int destroyRouter(router **thisPointer);
 
 
 
 
 /********** CONSTRUCT ****************/
-router* newRouter()
+router *newRouter(void)
 {
   //allocate memory for the object
   router *this   = secureAllocate(sizeof(router));
@@ -70,7 +70,7 @@ router* newRouter()
 
 
 //returns 0 on error
-static int destroyRouter(router** thisPointer)
+static int destroyRouter(router **thisPointer)
 {
   router *this;
  
@@ -94,7 +94,7 @@ static int destroyRouter(router** thisPointer)
 /********** PUBLIC METHODS ****************/
 
 //returns NULL on error
-static dataContainer* receive(router* this, uint32_t payloadBytesize)
+static dataContainer *receive(router *this, uint32_t payloadBytesize)
 {
   dataContainer   *receivedMessage;
   uint32_t        bytesReceived;
@@ -152,7 +152,7 @@ static uint32_t getIncomingByteize(router *this)
 }
 
 //returns 0 on error
-static int transmit(router* this, void* payload, uint32_t payloadBytesize)
+static int transmit(router *this, void *payload, uint32_t payloadBytesize)
 {
   uint32_t sentBytes;  
   uint32_t sendReturn;
@@ -196,7 +196,7 @@ static int transmitBytesize(router *this, uint32_t bytesize)
 
 //returns 0 on error
 //comments reference https://www.ietf.org/rfc/rfc1928.txt
-static int socks5Connect(router* this, char* destAddress, uint8_t destAddressBytesize, uint16_t destPort)
+static int socks5Connect(router *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort)
 {
   dataContainer *socksRequest;
   dataContainer *proxyResponse;
@@ -314,7 +314,7 @@ static int socks5Connect(router* this, char* destAddress, uint8_t destAddressByt
 }
 
 //returns 0 on error
-static int ipv4Connect(router* this, char* address, char* port)
+static int ipv4Connect(router *this, char *address, char *port)
 {
   struct addrinfo connectionInformation;
   struct addrinfo *encodedAddress;
@@ -373,7 +373,7 @@ static int ipv4Connect(router* this, char* address, char* port)
 }
 
 //return 0 on error
-int ipv4Listen(router* this, char* address, int port)
+int ipv4Listen(router *this, char *address, int port)
 {
   struct sockaddr_in bindInfo;
   struct in_addr     formattedAddress;
@@ -418,7 +418,7 @@ int ipv4Listen(router* this, char* address, int port)
 }
 
 //returns -1 on error
-static int getConnection(router* this)
+static int getConnection(router *this)
 {
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -434,7 +434,7 @@ static int getConnection(router* this)
 }
 
 //returns 0 on error
-static int setSocket(router* this, int socket)
+static int setSocket(router *this, int socket)
 {
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been");

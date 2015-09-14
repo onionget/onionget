@@ -7,15 +7,15 @@
 #include "server.h"
 #include "controller.h" //has enums
 
-//                            0          1           2                3                   4                      5                                6       7             8 
+//                            0          1           2                3                   4                      5                                6       7             8+ 
 //client input format :  [./onionGet] [client] [tor bind address] [tor listen port]  [onion address]       [onion port]                    [operation] [save path] [filenames...] 
 //server input format :  [./onionGet] [server] [server address]   [server port]      [shared folder path]  [memory cache megabyte size] 
 
 static int initializeClient(int argc, char *argv[]);
 static int clientOperationValid(char* operation);
-static int clientSanityCheck(char* onionPort, char* onionAddress, char* operation);
-static int showHelpExit();
-static int serverSanityCheck(int argc, char* bindAddress, char* listenPort);
+static int clientSanityCheck(char *onionPort, char *onionAddress, char *operation);
+static int showHelpExit(void);
+static int serverSanityCheck(int argc, char *bindAddress, char *listenPort);
 static int initializeServer(int argc, char *argv[]);
 
 
@@ -73,7 +73,7 @@ static int initializeClient(int argc, char *argv[])
 
 
 //returns 0 if invalid or NULL (which is invalid in addition to being an error), or 1 if valid
-static int clientOperationValid(char* operation)
+static int clientOperationValid(char *operation)
 {
   char *validOperations[C_VALID_OPERATION_COUNT] = {"--get",}; 
   int testedOperations;
@@ -94,7 +94,7 @@ static int clientOperationValid(char* operation)
 
 
 //returns 0 on error
-static int clientSanityCheck(char* onionPort, char* onionAddress, char* operation)
+static int clientSanityCheck(char *onionPort, char *onionAddress, char *operation)
 {  
   if( onionPort == NULL || onionAddress == NULL || operation == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -156,7 +156,7 @@ static int initializeServer(int argc, char *argv[])
 
 //returns 0 on error 1 on success
 //TODO: Consider regex checks of all server initialization values? NOTE: assumes ipv4 style addresses
-static int serverSanityCheck(int argc, char* bindAddress, char* listenPort)
+static int serverSanityCheck(int argc, char *bindAddress, char *listenPort)
 {
   if(bindAddress == NULL || listenPort == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");

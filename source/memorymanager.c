@@ -5,7 +5,7 @@
 #include "memorymanager.h"
 
 //returns NULL on error
-void* secureAllocate(uint64_t bytesize)
+void *secureAllocate(uint64_t bytesize)
 {
   void *memory = calloc(1, bytesize);
   
@@ -18,7 +18,7 @@ void* secureAllocate(uint64_t bytesize)
 }
 
 //note: memory must be a void**
-int secureFree(void* memory, uint64_t bytesize)
+int secureFree(void *memory, uint64_t bytesize)
 {
   volatile unsigned char *deoptimizedDataPointer;
   unsigned char          *dataBuffer;
