@@ -112,6 +112,9 @@ static int insert(dll *this, int end, char *id, uint64_t idBytesize, dataContain
 
 /************ PRIVATE METHODS ******************/
 
+/*
+ * newDllObject returns NULL on error, or a pointer to a new dllObject on success. 
+ */
 static dllObject *newDllObject(dataContainer *dataContainer, char *id, uint64_t idBytesize)
 { 
   
@@ -133,7 +136,8 @@ static dllObject *newDllObject(dataContainer *dataContainer, char *id, uint64_t 
   object->identifier = secureAllocate(idBytesize);
   if(object->identifier == NULL){
     printf("Error: Failed to allocate memory for linked list object identified\n");
-    return NULL; //add free
+    secureFree(&object, sizeof(struct dllObject));
+    return NULL; 
   }
   
   //write the id into the object identifier field
