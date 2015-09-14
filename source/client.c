@@ -11,49 +11,27 @@
 #include "client.h"
 
 enum{  DELIMITER_BYTESIZE     = 1   };
-enum{  FIRST_FILE_POSITION    = 7   };
-enum{  FIXED_CLI_INPUTS       = 8   }; // [./onionGet] [tor bind address] [tor listen port] [onion address] [onion port] [operation] [save path] [filenames...] (8 including one file)
 enum{  ONION_ADDRESS_BYTESIZE = 22  };
 
-static int showHelp();
-static int sanityCheck(int argc, char* secondArgument, char* onionPort, char* onionAddress);
 static int establishConnection(client* this);
-static int prepareFileRequestString(client* this, int argc, char* argv[]);
-static uint32_t calculateFileRequestStringBytesize(int argc, char* argv[]);
-static int getFiles(client* this, int argc, char *argv[]);
-static int executeOperation(client* this, int argc, char* argv[]);
-
-
-/*
-int main(int argc, char *argv[])
-{
-  client *client;
-  client = newClient(argc, argv);
-  if(client == NULL) exit(1); 
-  
-  if( client->executeOperation(client, argc, argv) ){
-    printf("Operation Complete");
-  }
-  else{
-    printf("Operation Failed"); 
-  }
-    
-  return 0; 
-}
-*/
-
+static int prepareFileRequestString(client* this);
+static uint32_t calculateFileRequestStringBytesize(client* this);
+static int getFiles(client* this);
+static int executeOperation(client* this);
 
 
 /******** CONSTRUCTOR ***********/
-client* newClient(int argc, char* argv[])
+client* newClient(char *torBindAddress, char *torPort, char *onionAddress, char *onionPort, char *operation, char *dirPath, char **fileNames, uint32_t fileCount)
 {
   client *this; 
   
-  //make sure the input is in the correct form 
-  if( argc < FIXED_CLI_INPUTS ) showHelp();
-  
+  if(torBindAddress == NULL || torPort == NULL || onionAddress == NULL || onionPort == NULL || operation == NULL || dirPath == NULL || *fileNames == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return NULL; 
+  }
+
   //allocate memory for the client
-  this = secureAllocate(sizeof(client));
+  this = secureAllocate(sizeof(struct client));
   if(this == NULL){
    printf("Error: Failed to instantiate a client\n");
    return NULL; 
@@ -61,26 +39,23 @@ client* newClient(int argc, char* argv[])
  
   //initialize the client properties
   this->router           = newRouter();
-  this->torBindAddress   = argv[1];
-  this->torPort          = argv[2];
-  this->onionAddress     = argv[3];
-  this->onionPort        = argv[4];
-  this->operation        = argv[5]; 
-  this->dirPath          = argv[6]; 
+  this->torBindAddress   = torBindAddress;
+  this->torPort          = torPort;
+  this->onionAddress     = onionAddress;
+  this->onionPort        = onionPort;
+  this->operation        = operation;
+  this->dirPath          = dirPath;  
+  this->fileNames        = fileNames; 
+  this->fileCount        = fileCount; 
+  
   
   //initialize the client public methods
   this->getFiles         = &getFiles;
   this->executeOperation = &executeOperation;
 
-  //make sure the client is in a sane state
-  if( !sanityCheck(argc, this->torBindAddress, this->onionPort, this->onionAddress) ){
-    printf("Error: Failed to instantiate a client\n");
-    return NULL; 
-  }
-  
   
   //prepare the file request string
-  if( !prepareFileRequestString(this, argc, argv) ){
+  if( !prepareFileRequestString(this) ){
     printf("Error: Failed to instantiate a client\n");
     return NULL; 
   }
@@ -102,23 +77,24 @@ client* newClient(int argc, char* argv[])
 /************ PUBLIC METHODS ******************/
 
 //return 0 on error and 1 on success
-static int executeOperation(client* this, int argc, char* argv[])
+static int executeOperation(client* this)
 {
   if( this == NULL ){
+    printf("Error: Something was NULL that shouldn't have been\n");
     return 0; 
   }
   
-  if  (   !strcmp(this->operation, "--get")  ) return this->getFiles(this, argc, argv);
-  else                                         return showHelp();  
+  if  (   !strcmp(this->operation, "--get")  ) return this->getFiles(this);
+  else                                         return 0;  
 }
 
 
 
-static int getFiles(client* this, int argc, char *argv[])
+static int getFiles(client* this)
 {
   int           currentFilePosition;
-  int           filesRequested; 
   uint32_t      incomingFileBytesize;
+  uint32_t      fileCount; 
   diskFile      *diskFile;
   dataContainer *incomingFile; 
   
@@ -138,7 +114,7 @@ static int getFiles(client* this, int argc, char *argv[])
   }
   
   
-  for(currentFilePosition = FIRST_FILE_POSITION, filesRequested = argc - FIRST_FILE_POSITION; filesRequested--; currentFilePosition++){ 
+  for(fileCount = this->fileCount, currentFilePosition = 0; fileCount--; currentFilePosition++){ 
     
     
     incomingFileBytesize = this->router->getIncomingBytesize(this->router); 
@@ -153,7 +129,7 @@ static int getFiles(client* this, int argc, char *argv[])
       return 0; 
     }
     
-    diskFile = newDiskFile(this->dirPath, argv[currentFilePosition], "w");
+    diskFile = newDiskFile(this->dirPath, this->fileNames[currentFilePosition], "w");
     if(diskFile == NULL){
       printf("Error: Failed to create file on disk, aborting\n");
       return 0;
@@ -182,40 +158,45 @@ static int getFiles(client* this, int argc, char *argv[])
 
 
 /************* PRIVATE METHODS ****************/ 
-static uint32_t calculateFileRequestStringBytesize(int argc, char* argv[])
+
+//returns -1 on error
+static uint32_t calculateFileRequestStringBytesize(client *this)
 {
   uint32_t fileRequestStringBytesize; 
-  uint32_t filesRequested;
   uint32_t currentFile;
+  uint32_t fileCount;
   
-  filesRequested = argc - FIRST_FILE_POSITION;
-  currentFile    = FIRST_FILE_POSITION;
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return -1; 
+  }
   
-  for( fileRequestStringBytesize = 0 ; filesRequested-- ; currentFile++ ){
-    fileRequestStringBytesize += strlen(argv[currentFile]) + DELIMITER_BYTESIZE;
+  for( fileCount = this->fileCount, currentFile = 0, fileRequestStringBytesize = 0 ; fileCount-- ; currentFile++ ){
+    fileRequestStringBytesize += strlen(this->fileNames[currentFile]) + DELIMITER_BYTESIZE;
   }
   
   return fileRequestStringBytesize;
 }
 
 //returns 0 on error
-static int prepareFileRequestString(client* this, int argc, char* argv[])
+static int prepareFileRequestString(client* this)
 {
-  uint32_t       fileRequestStringBytesize; 
-  uint32_t       filesRequested;
-  uint32_t       currentFile; 
-  uint32_t       currentWriteLocation; 
-  uint32_t       sectionBytesize; 
+  uint32_t   fileRequestStringBytesize; 
+  uint32_t   currentFile; 
+  uint32_t   currentWriteLocation; 
+  uint32_t   sectionBytesize; 
+  uint32_t   fileCount;
   
   if(this == NULL){
     printf("Error: something was NULL that shouldn't have been\n"); 
     return 0;
   }
   
-  filesRequested            = argc - FIRST_FILE_POSITION;
-  currentFile               = FIRST_FILE_POSITION;
-  
-  fileRequestStringBytesize = calculateFileRequestStringBytesize(argc, argv); 
+  fileRequestStringBytesize = calculateFileRequestStringBytesize(this); 
+  if(fileRequestStringBytesize == -1){
+    printf("Error: Failed to compute file request string bytesize\n");
+    return 0;
+  }
   
   this->fileRequestString = newDataContainer(fileRequestStringBytesize); 
   if(this->fileRequestString == NULL){
@@ -224,14 +205,15 @@ static int prepareFileRequestString(client* this, int argc, char* argv[])
   }
   
   
-  for(currentWriteLocation = 0; filesRequested-- ; currentFile++){ 
-    sectionBytesize = strlen(argv[currentFile]);
-    memcpy( &(this->fileRequestString->data[currentWriteLocation]), argv[currentFile], sectionBytesize);
+  for(fileCount = this->fileCount, currentFile = 0, currentWriteLocation = 0; fileCount-- ; currentFile++){ 
+    sectionBytesize = strlen(this->fileNames[currentFile]);
+    memcpy( &(this->fileRequestString->data[currentWriteLocation]), this->fileNames[currentFile], sectionBytesize);
     currentWriteLocation += sectionBytesize;
     memcpy( &(this->fileRequestString->data[currentWriteLocation]), "/", DELIMITER_BYTESIZE);
     currentWriteLocation += DELIMITER_BYTESIZE; 
   }
-  //string ends with NULL, this is enforced at server end as well 
+  
+  //string ends with NULL, this must be enforced at server end as well 
   memcpy( &(this->fileRequestString->data[currentWriteLocation - 1]), "\0", 1);
   
   return 1; 
@@ -257,37 +239,4 @@ static int establishConnection(client* this)
   }
   
   return 1; 
-}
-
-//returns 0 on error
-static int sanityCheck(int argc, char* secondArgument, char* onionPort, char* onionAddress)
-{  
-  
-  if( secondArgument == NULL || onionPort == NULL || onionAddress == NULL ){
-    printf("Error: Something was NULL that shouldn't have been\n");
-    return 0;
-  }
-  
-  if( strlen(onionPort) > 5 || strtol(onionPort, NULL, 10) > 65535){
-   printf("Error: Port of destination must be at or below 65535\n");
-   return 0; 
-  }
-  
-  
-  if( strlen(onionAddress) != ONION_ADDRESS_BYTESIZE ){
-   printf("Error: put onion address in form abcdefghijklmnop.onion\n");
-   return 0; 
-  }
-  
-  return 1; 
-}
-
-
-
-static int showHelp()
-{
-    printf("\n\nSyntax: ./OnionGet [tor bind address] [tor listen port] [server onion address] [server onion port] [operation]\n");  
-    printf("\nOperations\n");
-    printf("\n--get [save path] [file names] --- gets each named file\n\n");
-    return 1; 
 }

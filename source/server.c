@@ -29,29 +29,13 @@ static int serverListen(server* this);
 //[exe] [server address] [server port] [shared folder path] [memory cache megabyte size] 
 
 
-int main(int argc, char *argv[])
-{
-  server *server;
-  
-  server = newServer(argc, argv);
-  if(server == NULL){
-    printf("Failed to start server\n");
-    exit(1); 
-  }
-  
-  server->serverListen(server);
-  return 0; 
-}
-
-
-
-server* newServer(int argc, char *argv[])
+server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uint64_t maxMemoryCacheMegabytes)
 {
   server *this; 
-  
-  if(argc != 5){
-    printf("Error: incorrect parameter count!\n");
-    return NULL;  
+    
+  if(sharedFolderPath == NULL || bindAddress == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return NULL;
   }
   
   this = secureAllocate(sizeof(struct server));
@@ -60,11 +44,11 @@ server* newServer(int argc, char *argv[])
     return NULL; 
   }
   
-  this->sharedFolderPath         = argv[3];
+  this->sharedFolderPath         = sharedFolderPath;
   this->sharedFolderPathBytesize = strlen(this->sharedFolderPath); 
-  this->bindAddress              = argv[1];
-  this->listenPort               = (int)      strtoll(argv[2], NULL, 10); 
-  this->maxMemoryCacheBytesize   = (uint64_t) strtoll(argv[4], NULL, 10) * BYTES_IN_A_MEGABYTE; 
+  this->bindAddress              = bindAddress;
+  this->listenPort               = listenPort;
+  this->maxMemoryCacheBytesize   = maxMemoryCacheMegabytes * BYTES_IN_A_MEGABYTE; 
   
   this->cachedSharedFiles = newDll();
   if(this->cachedSharedFiles == NULL){
@@ -270,7 +254,7 @@ int cacheSharedFiles(server* this)
     return 0;
   }
   
-  for( currentlyCachedBytes = 0 ; ( fileEntry = readdir(directory) ); {} ){
+  for( currentlyCachedBytes = 0 ; ( fileEntry = readdir(directory) ); ){
    
     if( !strcmp(fileEntry->d_name, ".") || !strcmp(fileEntry->d_name, "..") ){
       continue;

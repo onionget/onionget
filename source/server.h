@@ -1,5 +1,6 @@
 #pragma once
 #include "router.h"
+#include "dlinkedlist.h"
 
 typedef struct server{
   char     *sharedFolderPath;
@@ -22,4 +23,4 @@ typedef struct activeConnection{
 
 
 
-server* newServer(int argc, char *argv[]);
+server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uint64_t maxMemoryCacheMegabytes);
