@@ -90,6 +90,10 @@ static int insert(dll *this, int end, char *id, uint64_t idBytesize, dataContain
   
   //sanity checks passed so allocate a new object
   object = newDllObject(dataContainer, id, idBytesize);
+  if(object == NULL){
+    printf("Error: Failed to create dll object\n");
+    return 0;
+  }
 
 
   //insert the item into the list according to the end specified 
