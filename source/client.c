@@ -34,7 +34,6 @@ client *newClient(char *torBindAddress, char *torPort, char *onionAddress, char 
 {
   client *this; 
   
-  //make sure pointers aren't NULL
   if(torBindAddress == NULL || torPort == NULL || onionAddress == NULL || onionPort == NULL || operation == NULL || dirPath == NULL || *fileNames == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return NULL; 
@@ -77,7 +76,7 @@ client *newClient(char *torBindAddress, char *torPort, char *onionAddress, char 
     return NULL; 
   }
   
-  //return the client object
+
   return this; 
 }
 
@@ -94,7 +93,6 @@ client *newClient(char *torBindAddress, char *torPort, char *onionAddress, char 
  */
 static int executeOperation(client *this)
 {
-  //make sure this isn't NULL
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0; 
@@ -116,7 +114,6 @@ static int getFiles(client *this)
   uint32_t      fileCount; 
   dataContainer *incomingFile; 
   
-  //make sure this isn't NULL
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
@@ -167,7 +164,6 @@ static int writeFileToDisk(client *this, char *fileName, dataContainer *fileData
 {
   diskFile *diskFile;
   
-  //make sure none of the passed in pointers point to NULL
   if(this == NULL || fileName == NULL || fileData == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0; 
@@ -203,7 +199,7 @@ static dataContainer *getIncomingFile(client *this)
   dataContainer *incomingFile;
   uint32_t      incomingFileBytesize;
   
-  //make sure this isn't NULL
+  
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return NULL; 
@@ -233,7 +229,6 @@ static dataContainer *getIncomingFile(client *this)
  */
 static int sendRequestString(client *this)
 {
-  //make sure this isn't NULL
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
@@ -269,10 +264,12 @@ static uint32_t calculateFileRequestStringBytesize(client *this)
     return -1; 
   }
   
+  //get bytesize of each requested file name and add it to the file request strings total bytesize + 1 byte each for the delimiter
   for( fileCount = this->fileCount, currentFile = 0, fileRequestStringBytesize = 0 ; fileCount-- ; currentFile++ ){
     fileRequestStringBytesize += strlen(this->fileNames[currentFile]) + DELIMITER_BYTESIZE;
   }
   
+  //return the fileRequestStringBytesize
   return fileRequestStringBytesize;
 }
 
@@ -292,19 +289,22 @@ static int prepareFileRequestString(client *this)
     return 0;
   }
   
+  //calculate the bytesize of the file request string
   fileRequestStringBytesize = calculateFileRequestStringBytesize(this); 
   if(fileRequestStringBytesize == -1){
     printf("Error: Failed to compute file request string bytesize\n");
     return 0;
   }
   
+  //make a dataContainer object for holding the file request string
   this->fileRequestString = newDataContainer(fileRequestStringBytesize); 
   if(this->fileRequestString == NULL){
     printf("Error: Failed to allocate memory for file request string\n");
     return 0; 
   }
   
-  
+  //go through the file names and concatenate them together separated by the '/' delimiter
+  //preformat: "fileName/AnotherName/yetAnother/"
   for(fileCount = this->fileCount, currentFile = 0, currentWriteLocation = 0; fileCount-- ; currentFile++){ 
     sectionBytesize = strlen(this->fileNames[currentFile]);
     memcpy( &(this->fileRequestString->data[currentWriteLocation]), this->fileNames[currentFile], sectionBytesize);
@@ -313,7 +313,8 @@ static int prepareFileRequestString(client *this)
     currentWriteLocation += DELIMITER_BYTESIZE; 
   }
   
-  //string ends with NULL, this must be enforced at server end as well 
+  //however, the string must be null terminated, this is enforced at the server end, but we set it here as well 
+  //final format: "fileName/AnotherName/yetAnother\0" 
   memcpy( &(this->fileRequestString->data[currentWriteLocation - 1]), "\0", 1);
   
   return 1; 
@@ -329,11 +330,13 @@ static int establishConnection(client *this)
     return 0;
   }
   
+  //connect the client objects router to Tor 
   if(!this->router->ipv4Connect(this->router, this->torBindAddress, this->torPort)){
     printf("Error: Failed to connect client\n");
     return 0;
   }
   
+  //tell Tor to connect to the onion_address:port
   if( !this->router->socks5Connect(this->router, this->onionAddress, ONION_ADDRESS_BYTESIZE, (uint16_t)strtol(this->onionPort, NULL, 10)) ){
     printf("Error: Failed to connect to destination address\n");
     return 0;
