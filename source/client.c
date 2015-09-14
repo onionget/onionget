@@ -150,7 +150,7 @@ static int getFiles(client *this)
  
   }
   
-  //helps ensure that files are written to the disk
+  //helps ensure that files are written to the disk (NOTE: sync after each individual file, or after all files like currently?)
   sync(); 
   
   return 1; 
