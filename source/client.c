@@ -24,8 +24,9 @@ static int            writeFileToDisk(client *this, char *fileName, dataContaine
 
 
 
-/*                                                                   CLIENT OBJECT CONSTRUCTOR
- * 
+/************ OBJECT CONSTRUCTOR ******************/
+
+/*    
  * newClient returns a client object on success and NULL on failure, the client object is already connected to onionAddress on onionPort, and the file request string
  * is already constructed.  
  * 
