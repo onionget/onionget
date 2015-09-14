@@ -1,3 +1,5 @@
+//controller
+
 enum{ HIGHEST_VALID_PORT      = 65535}; 
 
 enum{ EXE_NAME                = 0 }; 
@@ -24,3 +26,8 @@ enum{ C_VALID_OPERATION_COUNT = 1 };
 
 
 enum{  ONION_ADDRESS_BYTESIZE = 22  };
+
+
+//client
+
+enum{  DELIMITER_BYTESIZE     = 1   };

@@ -3,34 +3,44 @@
 #include <string.h>
 #include <stdint.h>
 
-
 #include "router.h"
 #include "datacontainer.h"
 #include "memorymanager.h"
 #include "diskfile.h" 
 #include "client.h"
+#include "og_enums.h" 
 
-enum{  DELIMITER_BYTESIZE     = 1   };
-enum{  ONION_ADDRESS_BYTESIZE = 22  };
+//PUBLIC METHODS
+static int            executeOperation(client *this);
+static int            getFiles(client *this);
 
-static int establishConnection(client *this);
-static int prepareFileRequestString(client *this);
-static uint32_t calculateFileRequestStringBytesize(client *this);
-static int getFiles(client *this);
-static int executeOperation(client *this);
+//PRIVATE METHODS
+static int            establishConnection(client *this);
+static int            prepareFileRequestString(client *this);
+static uint32_t       calculateFileRequestStringBytesize(client *this);
+static int            sendRequestString(client *this);
+static dataContainer  *getIncomingFile(client *this);
+static int writeFileToDisk(client *this, char *fileName, dataContainer *fileData);
 
 
-/******** CONSTRUCTOR ***********/
+
+/*                                                                   CLIENT OBJECT CONSTRUCTOR
+ * 
+ * newClient returns a client object on success and NULL on failure, the client object is already connected to onionAddress on onionPort, and the file request string
+ * is already constructed.  
+ * 
+ */
 client *newClient(char *torBindAddress, char *torPort, char *onionAddress, char *onionPort, char *operation, char *dirPath, char **fileNames, uint32_t fileCount)
 {
   client *this; 
   
+  //make sure pointers aren't NULL
   if(torBindAddress == NULL || torPort == NULL || onionAddress == NULL || onionPort == NULL || operation == NULL || dirPath == NULL || *fileNames == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return NULL; 
   }
 
-  //allocate memory for the client
+  //allocate memory for the client object
   this = secureAllocate(sizeof(struct client));
   if(this == NULL){
    printf("Error: Failed to instantiate a client\n");
@@ -67,6 +77,7 @@ client *newClient(char *torBindAddress, char *torPort, char *onionAddress, char 
     return NULL; 
   }
   
+  //return the client object
   return this; 
 }
 
@@ -76,78 +87,67 @@ client *newClient(char *torBindAddress, char *torPort, char *onionAddress, char 
 
 /************ PUBLIC METHODS ******************/
 
-//return 0 on error and 1 on success
+
+/*
+ * executeOperation returns 0 on error and 1 on success, this decides what to do based on the operation property of the client object
+ * right now the only possible operation is --get which gets files from the server
+ */
 static int executeOperation(client *this)
 {
+  //make sure this isn't NULL
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0; 
   }
   
+  //carry out the operation, if the operation isn't valid return 0 because it's an error (this is redundantly checked, also in controller.c) 
   if  (   !strcmp(this->operation, "--get")  ) return this->getFiles(this);
   else                                         return 0;  
 }
 
 
-
+/*
+ * getFiles returns 0 on error and 1 on success, it sends the server the file request string, then goes through each file name 
+ * and writes it to the disk with the data received from the server for that file name
+ */
 static int getFiles(client *this)
 {
-  int           currentFilePosition;
-  uint32_t      incomingFileBytesize;
+  int           currentFile;
   uint32_t      fileCount; 
-  diskFile      *diskFile;
   dataContainer *incomingFile; 
   
+  //make sure this isn't NULL
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
   
-  if( !this->router->transmitBytesize(this->router, this->fileRequestString->bytesize) ){
-    printf("Error: Failed to transmit request string\n");
+  //send the server the request string
+  if( !sendRequestString(this) ){
+    printf("Error: Failed to send server request string\n");
     return 0;
   }
-  
-  if( !this->router->transmit(this->router, this->fileRequestString->data, this->fileRequestString->bytesize) ){
-    printf("Error: Failed to transmit request string\n");
-    return 0;
-  }
-  
-  
-  for(fileCount = this->fileCount, currentFilePosition = 0; fileCount--; currentFilePosition++){ 
     
-    
-    incomingFileBytesize = this->router->getIncomingBytesize(this->router); 
-    if(incomingFileBytesize == -1){
-      printf("Error: Failed to get incoming file bytesize, aborting\n");
-      return 0;
-    }
-     
-    incomingFile = this->router->receive(this->router, incomingFileBytesize);
+  //get the files from the server
+  for(fileCount = this->fileCount, currentFile = 0; fileCount--; currentFile++){ 
+
+    //first get the incoming file
+    incomingFile = getIncomingFile(this);
     if(incomingFile == NULL){
-      printf("Error: Failed to get incoming file, aborting\n");
+      printf("Error: Failed to receive incoming file\n");
       return 0; 
     }
     
-    diskFile = newDiskFile(this->dirPath, this->fileNames[currentFilePosition], "w");
-    if(diskFile == NULL){
-      printf("Error: Failed to create file on disk, aborting\n");
+    //then write it to the disk
+    if( !writeFileToDisk(this, this->fileNames[currentFile], incomingFile) ){
+      printf("Error: Failed to write file to disk\n");
       return 0;
     }
     
-    if( !diskFile->diskFileWrite(diskFile, incomingFile) ){
-      printf("Error: Failed to write file to disk, aborting\n");
-      return 0;
-    }
-    
+    //then destroy the data container that holds the current file in RAM
     if( !incomingFile->destroyDataContainer(&incomingFile) ){
       printf("Error: Failed to destroy data container\n");
       return 0; 
-    }
-    
-    if( !diskFile->closeTearDown(&diskFile) ){
-      printf("Error: Failed to tear down disk file\n");
-      return 0;
     }
     
   }
@@ -159,7 +159,105 @@ static int getFiles(client *this)
 
 /************* PRIVATE METHODS ****************/ 
 
-//returns -1 on error
+/*
+ * writeFileToDisk returns 0 on error and 1 on success
+ * it writes the current file to the disk 
+ */
+static int writeFileToDisk(client *this, char *fileName, dataContainer *fileData)
+{
+  diskFile *diskFile;
+  
+  //make sure none of the passed in pointers point to NULL
+  if(this == NULL || fileName == NULL || fileData == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0; 
+  }
+  
+  //we instantiate a new diskFile object to write the received file to the disk
+  diskFile = newDiskFile(this->dirPath, fileName, "w");
+  if(diskFile == NULL){
+    printf("Error: Failed to create file on disk, aborting\n");
+    return 0;
+  }
+    
+  //then we write the received file to the disk
+  if( !diskFile->diskFileWrite(diskFile, fileData) ){
+    printf("Error: Failed to write file to disk, aborting\n");
+    return 0;
+  }
+    
+  //then we close the disk file and destroy the object
+  if( !diskFile->closeTearDown(&diskFile) ){
+    printf("Error: Failed to tear down disk file\n");
+    return 0;
+  }
+  
+  return 1; 
+}
+
+/*
+ * getIncomingFile returns NULL on error and a dataContainer with the received file on success
+ */
+static dataContainer *getIncomingFile(client *this)
+{
+  dataContainer *incomingFile;
+  uint32_t      incomingFileBytesize;
+  
+  //make sure this isn't NULL
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return NULL; 
+  }
+
+  //first the server sends us the incoming files bytesize
+  incomingFileBytesize = this->router->getIncomingBytesize(this->router); 
+  if(incomingFileBytesize == -1){
+    printf("Error: Failed to get incoming file bytesize, aborting\n");
+    return NULL;
+  }
+  
+  //next we get the incoming file from the server
+  incomingFile = this->router->receive(this->router, incomingFileBytesize);
+  if(incomingFile == NULL){
+    printf("Error: Failed to receive data, aborting\n");
+    return NULL; 
+  }
+  
+  //then we return the incoming file
+  return incomingFile; 
+}
+
+
+/*
+ * sendRequestString returns 0 on error and 1 on success, it sends the already initialized file request string to the server
+ */
+static int sendRequestString(client *this)
+{
+  //make sure this isn't NULL
+  if( this == NULL ){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
+  
+  //let the server know the bytesize of the request string
+  if( !this->router->transmitBytesize(this->router, this->fileRequestString->bytesize) ){
+    printf("Error: Failed to transmit request string\n");
+    return 0;
+  }
+  
+  //then send the server the request string
+  if( !this->router->transmit(this->router, this->fileRequestString->data, this->fileRequestString->bytesize) ){
+    printf("Error: Failed to transmit request string\n");
+    return 0;
+  }
+  
+  return 1; 
+}
+
+
+/*
+ * calculateFileRequestStringBytesize returns -1 on error and the bytesize of the file request string on success
+ */
 static uint32_t calculateFileRequestStringBytesize(client *this)
 {
   uint32_t fileRequestStringBytesize; 
@@ -178,7 +276,9 @@ static uint32_t calculateFileRequestStringBytesize(client *this)
   return fileRequestStringBytesize;
 }
 
-//returns 0 on error
+/*
+ * prepareFileRequestString returns 0 on error and 1 on success. It initializes the file request string property of the client object.  
+ */
 static int prepareFileRequestString(client *this)
 {
   uint32_t   fileRequestStringBytesize; 
@@ -219,10 +319,11 @@ static int prepareFileRequestString(client *this)
   return 1; 
 }
 
-
+/*
+ * establishConnection returns 0 on error and 1 on success, it connects the client object to the server 
+ */
 static int establishConnection(client *this)
 {
- 
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been"); 
     return 0;

@@ -23,3 +23,4 @@ typedef struct client{
 }client; 
 
 client* newClient(char *torBindAddress, char *torPort, char *onionAddress, char *onionPort, char *operation, char *dirPath, char **fileNames, uint32_t fileCount);
+
