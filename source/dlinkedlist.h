@@ -8,6 +8,7 @@ typedef struct dllObject
   struct dllObject *previous;
   struct dllObject *next;
   char             *identifier; 
+  uint64_t         identifierBytesize; 
   dataContainer    *dataContainer;
 }dllObject;
 

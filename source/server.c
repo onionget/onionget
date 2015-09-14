@@ -13,6 +13,7 @@
 #include "memorymanager.h"
 #include "diskfile.h"
 #include "server.h"
+#include "og_enums.h"
 
 
 enum{  TERMINATING_NULL_HOP        = 1         };

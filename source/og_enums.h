@@ -40,6 +40,6 @@ enum{ COUNT = 1 };
 
 
 
-/dlinkedlist
+//dlinkedlist
 enum{ DLL_HEAD = 0 };
 enum{ DLL_TAIL = 1 };

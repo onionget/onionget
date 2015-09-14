@@ -100,6 +100,8 @@ static int insert(dll *this, int end, char *id, uint64_t idBytesize, dataContain
   else if ( end        == DLL_TAIL )  insertSuccess = insertTail    ( this , object ); 
   
   if(!insertSuccess){
+    secureFree(&(object->identifier), object->identifierBytesize);
+    secureFree(&object, sizeof(struct dllObject)); 
     printf("Error: Failed to insert object into list\n");
     return 0; 
   }
@@ -139,6 +141,8 @@ static dllObject *newDllObject(dataContainer *dataContainer, char *id, uint64_t 
     secureFree(&object, sizeof(struct dllObject));
     return NULL; 
   }
+  
+  object->identifierBytesize = idBytesize; 
   
   //write the id into the object identifier field
   memcpy(object->identifier, id, idBytesize); 
