@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include  <unistd.h>
 
 #include "router.h"
 #include "datacontainer.h"
@@ -149,6 +150,9 @@ static int getFiles(client *this)
  
   }
   
+  //helps ensure that files are written to the disk
+  sync(); 
+  
   return 1; 
 }
 
@@ -199,7 +203,7 @@ static int getIncomingFile(client *this, diskFile *diskFile)
       return 0;
     }
     
-    //then destroy the data container that holds the current file in RAM
+    //then destroy the data container that holds the current file chunk in RAM
     if( !incomingFileChunk->destroyDataContainer(&incomingFileChunk) ){
       printf("Error: Failed to destroy data container\n");
       return 0; 

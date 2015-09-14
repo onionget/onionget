@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <unistd.h>
 
 #include "datacontainer.h"
 #include "diskfile.h"
@@ -174,12 +175,10 @@ static int diskFileWrite(diskFile *this, dataContainer *dataContainer)
   }
   
 
-  //TODO look more at error checking TODO also don't try to write the entire file at once (ie: don't get it all at once and then write it, loop from client)!!
   if( fwrite( (const void*)dataContainer->data, dataContainer->bytesize, COUNT, this->descriptor) != COUNT ){
     printf("Error: didn't write all data to file\n");
     return 0; 
   }
-  
   
   return 1; 
 }
