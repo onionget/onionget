@@ -2,4 +2,4 @@
 #include <stdint.h>
 
 void *secureAllocate(uint64_t bytesize);
-int secureFree(void *memory, uint64_t bytesize); //NOTE really void**
+int secureFree(void *memory, uint64_t bytesize); //NOTE memory is really a void**

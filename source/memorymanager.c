@@ -4,7 +4,9 @@
 #include <stdint.h>
 #include "memorymanager.h"
 
-//returns NULL on error
+/*
+ * secureAllocate returns NULL on error, otherwise returns a pointer to the allocated memory buffer, which is bytesize bytes and initialized to NULL. 
+ */
 void *secureAllocate(uint64_t bytesize)
 {
   void *memory = calloc(1, bytesize);
@@ -17,7 +19,10 @@ void *secureAllocate(uint64_t bytesize)
   return memory;
 }
 
-//note: memory must be a void**
+/*
+ * When passed a void** that dereferences to a void* pointing to bytesize bytes, secureFree first clears the buffer pointed to by setting it to all nuills
+ * and then it points the pointer to NULL. Returns 1 on success and 0 on error.  NOTE that memory must be a void** despite being a void* in the definition. 
+ */
 int secureFree(void *memory, uint64_t bytesize)
 {
   volatile unsigned char *deoptimizedDataPointer;

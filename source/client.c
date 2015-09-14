@@ -321,7 +321,7 @@ static int establishConnection(client *this)
     return 0;
   }
   
-  //connect the client objects router to Tor 
+  //connect the client objects router to Tor //TODO consider moving this to networking functions 
   if(!this->router->ipv4Connect(this->router, this->torBindAddress, this->torPort)){
     printf("Error: Failed to connect client\n");
     return 0;

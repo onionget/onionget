@@ -43,3 +43,8 @@ enum{ COUNT = 1 };
 //dlinkedlist
 enum{ DLL_HEAD = 0 };
 enum{ DLL_TAIL = 1 };
+
+
+//router
+enum{ RECEIVE_WAIT_TIMEOUT_SECONDS = 30 };
+enum{ RECEIVE_WAIT_TIMEOUT_USECS   = 0  };

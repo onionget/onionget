@@ -20,34 +20,46 @@
 #include "router.h"
 #include "datacontainer.h"
 #include "memorymanager.h"
+#include "og_enums.h"
 
-enum{ RECEIVE_WAIT_TIMEOUT_SECONDS = 30 };
-enum{ RECEIVE_WAIT_TIMEOUT_USECS   = 0  };
 
 
 //public methods
-static dataContainer *receive(router *this, uint32_t payloadBytesize);
-static int transmit(router *this, void *payload, uint32_t payloadBytesize);
-static int socks5Connect(router *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort);
-static int transmitBytesize(router *this, uint32_t bytesize);
-static uint32_t getIncomingByteize(router *this); //note that this only gets incoming bytesize if the incoming bytesize is actually sent, as a uint32_t 
-static int ipv4Connect(router *this, char *address, char *port);
-static int setSocket(router *this, int socket);
+static dataContainer  *receive            ( router *this            , uint32_t payloadBytesize                                                     );
+static int            transmit            ( router *this            , void *payload              , uint32_t payloadBytesize                        );
+static int            socks5Connect       ( router *this            , char *destAddress          , uint8_t destAddressBytesize , uint16_t destPort );
+static int            transmitBytesize    ( router *this            , uint32_t bytesize                                                            );
+static uint32_t       getIncomingBytesize ( router *this                                                                                           ); //note that this only gets incoming bytesize if the incoming bytesize is actually sent, as a uint32_t 
+static int            ipv4Connect         ( router *this            , char *ipv4Address          , char *port                                      );
+static int            setSocket           ( router *this            , int socket                                                                   );
+static int            destroyRouter       ( router **thisPointer                                                                                   );
+static int            ipv4Listen          ( router *this            , char *ipv4Address          , int port                                        );
+static int            getConnection       ( router *this                                                                                           );
+
+//private methods
+static int socksResponseValidate          ( router *this                                                                                           );
+static int sendSocks5ConnectRequest       ( router *this            , char *destAddress          , uint8_t destAddressBytesize , uint16_t destPort );
+static int initializeSocks5Protocol       ( router *this                                                                                           );
+static int setSocketRecvTimeout           ( router *this            , int timeoutSecs            , int timeoutUsecs                                );
 
 
-static int ipv4Listen(router *this, char *address, int port);
-static int getConnection(router *this);
-
-static int destroyRouter(router **thisPointer);
 
 
 
 
-/********** CONSTRUCT ****************/
+/********** CONSTRUCTOR ****************/
+
+/*
+ * newRouter returns a new router object on success and NULL on error.  
+ */
 router *newRouter(void)
 {
-  //allocate memory for the object
-  router *this   = secureAllocate(sizeof(router));
+  //allocate memory for the router object
+  router *this = secureAllocate(sizeof(struct router));
+  if(this == NULL){
+    printf("Error: Failed to allocate memory for router object\n");
+    return NULL;  
+  }
   
   //object properties
   this->socket   = -1; 
@@ -57,7 +69,7 @@ router *newRouter(void)
   this->transmitBytesize      = &transmitBytesize;
   this->receive               = &receive;
   this->socks5Connect         = &socks5Connect;
-  this->getIncomingBytesize   = &getIncomingByteize;
+  this->getIncomingBytesize   = &getIncomingBytesize;
   this->ipv4Connect           = &ipv4Connect; 
   this->ipv4Listen            = &ipv4Listen;
   this->getConnection         = &getConnection;
@@ -69,7 +81,14 @@ router *newRouter(void)
 }
 
 
-//returns 0 on error
+
+/********** PUBLIC METHODS ****************/
+
+
+
+/*
+ * destroyRouter returns 0 on error and 1 on success. It frees the memory associated with the router object. 
+ */
 static int destroyRouter(router **thisPointer)
 {
   router *this;
@@ -91,20 +110,27 @@ static int destroyRouter(router **thisPointer)
 }
 
 
-/********** PUBLIC METHODS ****************/
-
-//returns NULL on error
+/*
+ * recieve returns NULL on error, and a datacontainer containing payloadBytesize of incoming traffic on the socket on success
+ */
 static dataContainer *receive(router *this, uint32_t payloadBytesize)
 {
   dataContainer   *receivedMessage;
   uint32_t        bytesReceived;
   uint32_t        recvReturn;
   
+  //basic sanity checks
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been");
     return NULL; 
   }
   
+  if(this->socket == -1){
+    printf("Error: This router hasn't a valid socket associated with it\n");
+    return NULL; 
+  }
+  
+  //allocate the dataContainer object for the incoming message
   receivedMessage = newDataContainer(payloadBytesize);
   if(receivedMessage == NULL){
     printf("Error: Failed to allocate data container for received messager\n");
@@ -112,7 +138,6 @@ static dataContainer *receive(router *this, uint32_t payloadBytesize)
   }
     
   for(bytesReceived = 0, recvReturn = 0; bytesReceived != payloadBytesize; bytesReceived += recvReturn){
-    
     recvReturn = recv(this->socket, &(receivedMessage->data[bytesReceived]), payloadBytesize - bytesReceived, 0);     
     if(recvReturn == -1 || recvReturn == 0){ 
       printf("Error: Failed to receive bytes\n");
@@ -123,47 +148,63 @@ static dataContainer *receive(router *this, uint32_t payloadBytesize)
   return receivedMessage;
 }
 
-//returns -1 on error
-static uint32_t getIncomingByteize(router *this)
+/*
+ * getIncomingBytesize receives an incoming uint32_t that encodes the number of subsequent incoming bytes. 
+ * NOTE: That this function assumes the interlocutor sends a uint32_t encoding the number of subsequent incoming bytes.
+ * -1 is returned on error, otherwise the number of subsequent incoming bytes in host encoding.
+ */
+static uint32_t getIncomingBytesize(router *this)
 {
   uint32_t      incomingBytesize;
   dataContainer *incomingBytesizeContainer;
   
+  //basic sanity check
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return -1; 
   }
   
+  //receive the number of incoming bytes, which is encoded as a uint32_t
   incomingBytesizeContainer = this->receive(this, sizeof(uint32_t));
   if(incomingBytesizeContainer == NULL){
     printf("Error: Failed to get incoming bytesize\n");
     return -1;  
   }
   
+  //properly encode the number of incoming bytes
   incomingBytesize = *((uint32_t*)incomingBytesizeContainer->data);
   
+  //destroy the dataContainer holding the traffic we just received from the network
   if( !incomingBytesizeContainer->destroyDataContainer(&incomingBytesizeContainer) ){
     printf("Error: Failed to destroy data container\n");
     return -1; 
   }
   
-  
+  //return the host encoded incoming bytesize 
   return ntohl(incomingBytesize);
 }
 
-//returns 0 on error
+/*
+ * transmit sends payloadBytesize bytes of the buffer pointed to by payload, returns 0 on error and 1 on success
+ */
 static int transmit(router *this, void *payload, uint32_t payloadBytesize)
 {
   uint32_t sentBytes;  
   uint32_t sendReturn;
   
+  //basic sanity checking
   if(this == NULL || payload == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
   
+  if(this->socket == -1){
+    printf("Error: Router hasn't a socket set\n");
+    return 0;
+  }
+  
   for(sentBytes = 0, sendReturn = 0; sentBytes != payloadBytesize; sentBytes += sendReturn){
-    sendReturn = send(this->socket, payload, payloadBytesize - sentBytes, 0); //TODO not current keeping track of buffer position
+    sendReturn = send(this->socket, payload, payloadBytesize - sentBytes, 0); //TODO note not currently keeping track of payload position because it is void, think of a way around this
     if(sendReturn == -1){
       printf("Error: Failed to send bytes\n");
       return 0;
@@ -173,18 +214,29 @@ static int transmit(router *this, void *payload, uint32_t payloadBytesize)
  return 1; 
 }
 
-//returns 0 on error
+/*
+ * transmityBytesize returns 0 on error and 1 on success. It sends the network encoded bytesize value (bytesize) over the connected socket.
+ * This is intended to be received by the function getIncomingBytesize. 
+ */
 static int transmitBytesize(router *this, uint32_t bytesize)
 {
   uint32_t bytesizeEncoded;
   
+  //basic sanity checking
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
   
+  if(this->socket == -1){
+    printf("Error: Router hasn't a socket set\n");
+    return 0; 
+  }
+  
+  //encode the bytesize to network order
   bytesizeEncoded = htonl(bytesize);
   
+  //transmit the bytesize over the connected socket
   if( !this->transmit(this, &bytesizeEncoded, sizeof(uint32_t)) ){
     printf("Error: Failed to transmit bytesize\n");
     return 0; 
@@ -194,22 +246,243 @@ static int transmitBytesize(router *this, uint32_t bytesize)
 }
 
 
-//returns 0 on error
-//comments reference https://www.ietf.org/rfc/rfc1928.txt
+
+/*
+ * socks5Connect establishes a socks 5 connection to destAddress on destPort. Returns 0 on error and 1 on success. See also
+ * initializeSocks5Protocol, sendSocks5ConnectRequest, and socksResponseValidate. reference https://www.ietf.org/rfc/rfc1928.txt
+ */
 static int socks5Connect(router *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort)
-{
-  dataContainer *socksRequest;
-  dataContainer *proxyResponse;
-  int           requestBytesize;
-  
+{  
   if(this == NULL || destAddress == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
-
-  //desired destination port in network octet order
-  destPort = htons(destPort);
   
+  if( this->socket == -1 ){
+    printf("Error: No socket established for router\n");
+    return 0; 
+  }
+  
+  if( !initializeSocks5Protocol(this) ){
+    printf("Error: Failed to initialize socks 5 protocol\n");
+    return 0;
+  }
+
+  if( !sendSocks5ConnectRequest(this, destAddress, destAddressBytesize, destPort) ){
+    printf("Error: Failed to send socks connection request\n");
+    return 0;
+  }
+  
+  if( !socksResponseValidate(this) ){
+    printf("Error: Failed to establish socks connection\n");
+    return 0;    
+  }
+   
+  return 1; 
+}
+
+
+/*
+ * ipv4Connect connects the router to address:port by setting the routers socket to the connected socket
+ * NOTE: address must be in ipv4 format
+ * returns 0 on error and 1 on success
+ */
+static int ipv4Connect(router *this, char *ipv4Address, char *port)
+{
+  struct addrinfo connectionInformation;
+  struct addrinfo *encodedAddress;
+  
+  if(this == NULL || ipv4Address == NULL || port == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
+  
+  if(this->socket != -1){
+    printf("Error: Router already in use");
+    return 0; 
+  }
+  
+  connectionInformation.ai_family    = AF_INET;
+  connectionInformation.ai_socktype  = SOCK_STREAM;
+  connectionInformation.ai_flags     = 0;
+  connectionInformation.ai_protocol  = 0;
+  connectionInformation.ai_canonname = 0;
+  connectionInformation.ai_addr      = 0;
+  connectionInformation.ai_next      = 0;
+  
+
+  if( !this->setSocket( this, socket(AF_INET, SOCK_STREAM, 0) ) ){
+    printf("Error: Failed to set socket\n");
+    return 0;
+  }
+  
+  if(this->socket == -1){
+    printf("Error: Failed to create new socket");
+    return 0; 
+  } 
+  
+  if( !setSocketRecvTimeout(this, RECEIVE_WAIT_TIMEOUT_SECONDS, RECEIVE_WAIT_TIMEOUT_USECS) ){
+    printf("Error: Failed to configure socket properties\n");
+    return 0; 
+  }
+  
+  if( getaddrinfo(ipv4Address, port, (const struct addrinfo*)&connectionInformation, &encodedAddress) ){
+    printf("Error: Failed to encode address\n");
+    return 0; 
+  }
+  
+  if( connect(this->socket, encodedAddress->ai_addr, encodedAddress->ai_addrlen) ){
+    printf("Error: Failed to connect to ipv4 address\n");
+    return 0; 
+  }
+  
+  return 1; 
+}
+
+
+/*
+ * ipv4Listen puts the router into a listening state by creating a socket bound to ipv4Address:port and listening on it
+ * returns 0 on error and 1 on success
+ */
+int ipv4Listen(router *this, char *ipv4Address, int port)
+{
+  struct sockaddr_in bindInfo;
+  struct in_addr     formattedAddress;
+  
+  if(this == NULL || ipv4Address == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
+  
+  if(this->socket != -1){
+    printf("Error: Router already in use\n");
+    return 0; 
+  }
+  
+  if( !this->setSocket(this, socket(AF_INET, SOCK_STREAM, 0)) ){
+    printf("Error: Failed to set socket\n");
+    return 0; 
+  }
+
+  if(this->socket == -1){
+    printf("Error: Failed to create socket\n");
+    return 0; 
+  }
+  
+  if( !inet_aton( (const char*)ipv4Address , &formattedAddress) ){
+    printf("Error: Failed to convert IP bind address to network order\n"); 
+    return 0; 
+  }
+  
+  bindInfo.sin_family      = AF_INET;
+  bindInfo.sin_port        = htons(port);
+  bindInfo.sin_addr.s_addr = formattedAddress.s_addr; 
+  
+  
+  if( bind(this->socket, (const struct sockaddr*) &bindInfo, sizeof(bindInfo)) ){
+    printf("Error: Failed to bind to address\n");
+    return 0; 
+  }
+  
+  if( listen(this->socket, SOMAXCONN) ){
+    printf("Error: Failed to listen on socket\n");
+    return 0; 
+  }
+  
+  return 1; 
+}
+
+
+/*
+ * getConnection gets a connection on the listening socket, which must already be initialized (see ipv4Listen)
+ * returns -1 on error and the accepted connection on success
+ */
+static int getConnection(router *this)
+{
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return -1; 
+  }
+  
+  if(this->socket == -1){
+    printf("Error: Socket not initialized, can't accept\n");
+    return -1; 
+  }
+  
+  return accept(this->socket, NULL, NULL); 
+}
+
+
+/*
+ * setSocket sets the routers socket to the argument socket
+ * returns 0 on error and 1 on success
+ */
+static int setSocket(router *this, int socket)
+{
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been");
+    return 0;
+  }
+  
+  this->socket = socket; 
+  return 1;
+}
+
+
+
+/************ PRIVATE METHODS ******************/
+
+/*
+ * setSocketRecvTimeout sets how long the routers socket will idle waiting for incoming network traffic for 
+ * (when it is actually expecting incoming network traffic). If the timeout period expires with no new data
+ * received from the network (while it is being expected), an error occurs. 
+ * 
+ * returns 0 on error and 1 on success. 
+ */
+static int setSocketRecvTimeout(router *this, int timeoutSecs, int timeoutUsecs)
+{
+  struct timeval  recvTimeout;
+  
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0; 
+  }
+  
+  if(this->socket == -1){
+    printf("Error: Router doesn't have a socket\n");
+    return 0; 
+  }
+  
+  //if no data received after timeoutsecs + timeoutUsecs (while expecting data) then error out
+  recvTimeout.tv_sec  = timeoutSecs;  
+  recvTimeout.tv_usec = timeoutUsecs;  
+  
+  if( setsockopt(this->socket, SOL_SOCKET, SO_RCVTIMEO, &recvTimeout, sizeof(recvTimeout)) ){
+    printf("Error: Failed to set receive timeout on socket\n");
+    return 0; 
+  }
+  
+  return 1; 
+}
+
+/* reference https://www.ietf.org/rfc/rfc1928.txt
+ * 
+ * initializeSocks5protocol engages in the first part of the socks5 protocol, primarily ensuring the server supports socks 5
+ * this function also ensures the server doesn't expect authentication, router.c doesn't currently
+ * support socks with authentication. 
+ * 
+ * returns 1 on success, 0 on error (or failure in that the proxy server doesn't support our requirements). 
+ * 
+ */
+static int initializeSocks5Protocol(router *this)
+{ 
+  dataContainer *proxyResponse;
+  
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
+    
   // | VER | NMETHODS | METHODS |
   //socks version 5, one method, no authentication
   if( !this->transmit(this, "\005\001\000", 3) ){
@@ -239,6 +512,30 @@ static int socks5Connect(router *this, char *destAddress, uint8_t destAddressByt
     return 0;
   }
   
+  return 1; 
+}
+
+/*
+ * sendSocks5ConnectionRequest engages in the second part of the socks5 protocol, primarily attempting to establish a 
+ * connection to destAddress:destPort through the socks proxy. reference https://www.ietf.org/rfc/rfc1928.txt
+ * 
+ * returns 0 on error (or failure), 1 on success. 
+ * NOTE: desAddress should be a URL (I don't think this currently supports IP addresses, but TODO I should look into this) 
+ */
+static int sendSocks5ConnectRequest(router *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort)
+{
+  int           requestBytesize;
+  dataContainer *socksRequest;
+  
+  if(this == NULL || destAddress == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0; 
+  }
+  
+  //format the destination port in network order
+  destPort = htons(destPort);
+  
+  
  /* CLIENT REQUEST FORMAT
   * 
   * note destAddress is prepended with one octet specifying its bytesize
@@ -253,7 +550,6 @@ static int socks5Connect(router *this, char *destAddress, uint8_t destAddressByt
   requestBytesize = 1 + 1 + 1 + 1 + destAddressBytesize + 1 + 2;
   
 
-  
   socksRequest = newDataContainer(requestBytesize);
   if(socksRequest == NULL){
     printf("Error: Failed to create data container for socks request\n");
@@ -280,8 +576,27 @@ static int socks5Connect(router *this, char *destAddress, uint8_t destAddressByt
     return 0; 
   }
   
+  return 1; 
+}
+
+
+/*
+ * socksResponseValidate gets the final response from the socks server and ensures that everything has gone correctly.
+ * reference https://www.ietf.org/rfc/rfc1928.txt
+ * 
+ * returns 0 on error (or failure) and 1 on success. 
+ * 
+ */
+static int socksResponseValidate(router *this)
+{
+  dataContainer *proxyResponse;
   
- /* PROXY RESPONSE FORMAT
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0; 
+  }
+  
+   /* PROXY RESPONSE FORMAT
   * 
   * +----+-----+-------+------+----------+----------+
   * |VER | REP |  RSV  | ATYP | BND.ADDR | BND.PORT |
@@ -311,136 +626,4 @@ static int socks5Connect(router *this, char *destAddress, uint8_t destAddressByt
   }
   
   return 1; 
-}
-
-//returns 0 on error
-static int ipv4Connect(router *this, char *address, char *port)
-{
-  struct addrinfo connectionInformation;
-  struct addrinfo *encodedAddress;
-  struct timeval  recvTimeout;
-  
-  if(this == NULL || address == NULL || port == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
-    return 0;
-  }
-  
-  connectionInformation.ai_family    = AF_INET;
-  connectionInformation.ai_socktype  = SOCK_STREAM;
-  connectionInformation.ai_flags     = 0;
-  connectionInformation.ai_protocol  = 0;
-  connectionInformation.ai_canonname = 0;
-  connectionInformation.ai_addr      = 0;
-  connectionInformation.ai_next      = 0;
-  
-  if(this->socket != -1){
-    printf("Error: Router already in use");
-    return 0; 
-  }
-  
-  if( !this->setSocket( this, socket(AF_INET, SOCK_STREAM, 0) ) ){
-    printf("Error: Failed to set socket\n");
-    return 0;
-  }
-  
-  
-  if(this->socket == -1){
-    printf("Error: Failed to create new socket");
-    return 0; 
-  } 
-  
-  //if no data received after 30 seconds (while expecting data) then error out
-  recvTimeout.tv_sec  = RECEIVE_WAIT_TIMEOUT_SECONDS; 
-  recvTimeout.tv_usec = RECEIVE_WAIT_TIMEOUT_USECS; 
-  
-  if( setsockopt(this->socket, SOL_SOCKET, SO_RCVTIMEO, &recvTimeout, sizeof(recvTimeout)) ){
-    printf("Error: Failed to set receive timeout on socket\n");
-    return 0; 
-  }
-  
- 
-  if( getaddrinfo(address, port, (const struct addrinfo*)&connectionInformation, &encodedAddress) ){
-    printf("Error: Failed to encode address\n");
-    return 0; 
-  }
-  
-  if( connect(this->socket, encodedAddress->ai_addr, encodedAddress->ai_addrlen) ){
-    printf("Error: Failed to connect to proxy\n");
-    return 0; 
-  }
-  
-  return 1; 
-}
-
-//return 0 on error
-int ipv4Listen(router *this, char *address, int port)
-{
-  struct sockaddr_in bindInfo;
-  struct in_addr     formattedAddress;
-  
-  if(this == NULL || address == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
-    return 0;
-  }
-  
-  if(this->socket != -1){
-    printf("Error: Router already in use\n");
-    return 0; 
-  }
-  
-  this->socket = socket(AF_INET, SOCK_STREAM, 0);
-  if(this->socket == -1){
-    printf("Error: Failed to create socket");
-    return 0; 
-  }
-  
-  if( !inet_aton( (const char*)address , &formattedAddress) ){
-    printf("Error: Failed to convert IP bind address to network order\n"); 
-    return 0; 
-  }
-  
-  bindInfo.sin_family       = AF_INET;
-  bindInfo.sin_port         = htons(port);
-  bindInfo.sin_addr.s_addr  = formattedAddress.s_addr; 
-  
-  
-  if( bind(this->socket, (const struct sockaddr*) &bindInfo, sizeof(bindInfo)) ){
-    printf("Error: Failed to bind to address\n");
-    return 0; 
-  }
-  
-  if( listen(this->socket, SOMAXCONN) ){
-    printf("Error: Failed to listen on socket\n");
-    return 0; 
-  }
-  
-  return 1; 
-}
-
-//returns -1 on error
-static int getConnection(router *this)
-{
-  if(this == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
-    return -1; 
-  }
-  
-  if(this->socket == -1){
-    printf("Error: Socket not initialized, can't accept\n");
-    return -1; 
-  }
-  
-  return accept(this->socket, NULL, NULL); 
-}
-
-//returns 0 on error
-static int setSocket(router *this, int socket)
-{
-  if(this == NULL){
-    printf("Error: Something was NULL that shouldn't have been");
-    return 0;
-  }
-  
-  this->socket = socket; 
-  return 1;
 }
