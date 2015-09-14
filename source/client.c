@@ -20,7 +20,7 @@ static int            prepareFileRequestString(client *this);
 static uint32_t       calculateFileRequestStringBytesize(client *this);
 static int            sendRequestString(client *this);
 static dataContainer  *getIncomingFile(client *this);
-static int writeFileToDisk(client *this, char *fileName, dataContainer *fileData);
+static int            writeFileToDisk(client *this, char *fileName, dataContainer *fileData);
 
 
 
