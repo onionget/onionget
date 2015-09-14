@@ -181,7 +181,7 @@ static int getIncomingFile(client *this, char* fileName)
     
     //if the remainder of the file is less than or equal to FILE_CHUNK_BYTESIZE then get all of it. Otherwise get FILE_CHUNK_BYTESIZE of it
     if       ( incomingFileBytesize <= FILE_CHUNK_BYTESIZE ) bytesToGet = incomingFileBytesize;
-    else if  ( incomingFileBytesize >  FILE_CHUNK_BYTESIZE ) bytesToGet = FILE_CHUNK_BYTESIZE % incomingFileBytesize;
+    else                                                     bytesToGet = FILE_CHUNK_BYTESIZE % incomingFileBytesize; 
         
     //get up to FILE_CHUNK_BYTESIZE bytes of the file
     incomingFileChunk = this->router->receive(this->router,  bytesToGet);
