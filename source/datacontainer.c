@@ -8,8 +8,11 @@
 
 static int destroyDataContainer(dataContainer **thisPointer);
 
-/*           OBJECT CONSTRUCTOR
- * 
+
+/************ OBJECT CONSTRUCTOR ******************/
+
+/*           
+ *
  * returns NULL on error, on success returns a dataContainer object
  * 
  * dataContainer objects are simply structs for data buffers allocated for bytesize bytes,

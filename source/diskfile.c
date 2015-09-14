@@ -6,17 +6,15 @@
 #include "datacontainer.h"
 #include "diskfile.h"
 #include "memorymanager.h"
+#include "og_enums.h"
 
 
-enum{ COUNT = 1 };
 
 //PUBLIC METHODS
-static int diskFileWrite(diskFile *this, dataContainer *dataContainer);
-static dataContainer* diskFileRead(diskFile *this);
-
-
-static int closeTearDown(diskFile **thisPointer);
-static long int getBytesize(diskFile *this);
+static int             diskFileWrite(diskFile *this, dataContainer *dataContainer);
+static dataContainer   *diskFileRead(diskFile *this);
+static int             closeTearDown(diskFile **thisPointer);
+static long int        getBytesize(diskFile *this);
 
 
 //PRIVATE METHODS
@@ -25,40 +23,30 @@ static int fileModeReadable(char *mode);
 static int fileModeWritable(char *mode);
 static int fileModeValid(char *mode);
 static int fileModeSeekable(char *mode); 
+static int initializePathProperties(diskFile *this, char *path, char *name);
 
+/************ OBJECT CONSTRUCTOR ******************/
 
-//returns NULL on error
+/*
+ * newDiskFile returns NULL on error and a new diskFile object on success. The file identified by /path/name is already open in the passed mode. 
+ * path doesn't need to end with /, if it doesn't it will be added by initializePathProperties. 
+ */
 diskFile *newDiskFile(char *path, char *name, char *mode)
 {
   diskFile  *this;
-  uint32_t  pathBytesize;
-  uint32_t  nameBytesize;
-  uint32_t fullPathBytesize; 
-  int      valid;
-  
+ 
   if( path == NULL || name == NULL || mode == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
     return NULL; 
   }
   
   //sanity check
-  valid = fileModeValid(mode);
-  
-  if(valid == -1){
-    printf("Error: Failed to check if file mode valid\n");
+  if(fileModeValid(mode) != 1){
+    printf("Error: Invalid (or NULL) file mode specified\n");
     return NULL; 
   }
-  
-  if(!valid){
-    printf("Error: Invalid file mode specified\n");
-    return NULL;
-  }
-  
-  //get string sizes
-  pathBytesize         = strlen(path);
-  nameBytesize         = strlen(name);
-  fullPathBytesize     = pathBytesize + nameBytesize;
- 
+    
+
   //allocate memory for the object
   this = secureAllocate(sizeof(struct diskFile)); 
   if(this == NULL){
@@ -67,41 +55,16 @@ diskFile *newDiskFile(char *path, char *name, char *mode)
   }
   
   
-  //create the full path to the file, adding a terminating / if required
-  if( path[pathBytesize - 1] != '/' ){
-    this->fullPathBytesize = fullPathBytesize + 2; 
-    
-    this->fullPath  = secureAllocate(this->fullPathBytesize); //must +1 to ensure null termination, another +1 to add terminating / 
-    if(this->fullPath == NULL){
-      printf("Error: Failed to allocate memory to hold path\n");
-      secureFree(&this, sizeof(struct diskFile));
-      return NULL; 
-    }
-    
-    memcpy( &(this->fullPath[0]) , path , pathBytesize);
-    memcpy(&(this->fullPath[pathBytesize]), "/", 1);
-    memcpy(&(this->fullPath[pathBytesize + 1]), name, nameBytesize);
-  }
-  else{
-    this->fullPathBytesize = fullPathBytesize + 1; 
-    
-    this->fullPath  = secureAllocate(this->fullPathBytesize); //must +1 to ensure null termination
-    if(this->fullPath == NULL){
-      printf("Error: Failed to allocate memory to hold path\n");
-      secureFree(&this, sizeof(struct diskFile));
-      return NULL; 
-    }
-    
-    
-    memcpy( &(this->fullPath[0]) , path , pathBytesize);
-    memcpy( &(this->fullPath[pathBytesize]) , name , nameBytesize); 
+  if( !initializePathProperties(this, path, name) ){
+    printf("Error: Failed to initialize diskFile path\n");
+    return NULL; 
   }
   
   
   //open the file in the specified mode
-  if( diskFileOpen(this, mode) == -1 ){
+  if( !diskFileOpen(this, mode) ){
     printf("Error: Failed to open file\n");
-    secureFree(&this->fullPath, fullPathBytesize);
+    secureFree(&this->fullPath, this->fullPathBytesize);
     secureFree(&this, sizeof(struct diskFile));
     return NULL;
   }
@@ -113,40 +76,31 @@ diskFile *newDiskFile(char *path, char *name, char *mode)
   this->closeTearDown = &closeTearDown;
   this->getBytesize   = &getBytesize; 
   
-
-  //NOTE TODO open is my own and it is messy refactor this code
   
   return this; 
 }
 
 
 
-
 /******** PUBLIC METHODS *********/
 
-//returns -1 on error
+/*
+ * getBytesize returns -1 on error, and the bytesize of the initialized diskFile on success
+ */
 static long int getBytesize(diskFile *this)
 {
-  long int fileBytesize; 
-  int seekable;
+  long int  fileBytesize; 
   
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been");
     return -1; 
   }
   
-  seekable = fileModeSeekable(this->mode);
-  
-  if(seekable == -1){
-    printf("Error: Failed to check if file mode seekable\n");
+  if( fileModeSeekable(this->mode) != 1 ){
+    printf("Error: File mode is not seekable (or it's NULL)");
     return -1; 
   }
-  
-  if(!seekable){
-    printf("Error: File is not in a mode that lets us get its bytesize\n");
-    return -1; 
-  }
-  
+    
   if( fseek(this->descriptor, 0, SEEK_END) == -1 ){
     printf("Error: Failed to seek to end of file\n");
     return -1; 
@@ -167,9 +121,10 @@ static long int getBytesize(diskFile *this)
 
 
 
-
-//closes the file descriptor if it is open and destroys the struct (not named destroy because it doesn't destroy the file and might be confusing)
-//returns 0 on error
+/*
+ * closeTearDown returns 0 on error and 1 on success. It closes the file descriptor if it is open, and destroys the struct. (Not named destroy because it doesn't
+ * destroy the file on the fisk and might be a confusing name). 
+ */
 static int closeTearDown(diskFile **thisPointer)
 {
   diskFile *this;
@@ -199,31 +154,22 @@ static int closeTearDown(diskFile **thisPointer)
     return 0;
   }
   
-  
   return 1; 
 }
 
-//returns 0 on error
+/*
+ * diskFileWrite returns 0 on error and 1 on success. It writes the data in dataContainer to the file on the disk associated with the diskFile object. 
+ */
 static int diskFileWrite(diskFile *this, dataContainer *dataContainer) 
-{
-  int writable;
-  
+{  
   if(this == NULL || dataContainer == NULL){
-    printf("Error: Something was NULL that shouldn't have been");
+    printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
   
-  
-  writable = fileModeWritable(this->mode);
-  
-  if(writable == -1){
-    printf("Error: Failed to check if file mode is writable\n");
-    return 0;
-  }
-  
-  if(!writable){
-    printf("Error: File is not in a writable mode\n");
-    return 0;
+  if( fileModeWritable(this->mode) != 1 ){
+    printf("Error: File mode isn't writable (or it's NULL)\n"); 
+    return 0; 
   }
   
   if(!this->descriptor){
@@ -231,41 +177,34 @@ static int diskFileWrite(diskFile *this, dataContainer *dataContainer)
     return 0;
   }
   
-  //TODO look more at error checking
+  //TODO look more at error checking TODO also don't try to write the entire file at once!!
   if( fwrite( (const void*)dataContainer->data, dataContainer->bytesize, COUNT, this->descriptor) != COUNT ){
     printf("Error: didn't write all data to file\n");
     return 0; 
   }
   
-  
   return 1; 
 }
 
 
-//returns NULL on error
+/*
+ * diskFileRead returns NULL on error and a pointer to a dataContainer holding the data from the file associated with the diskFile object on success.
+ */
 static dataContainer *diskFileRead(diskFile *this)
 {
   dataContainer *dataContainer; 
   long int      fileBytesize;
-  int           readable; 
-  
+
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
     return NULL; 
   }
   
-  readable = fileModeReadable(this->mode);
-  
-  if(readable == -1){
-    printf("Error: Failed to check if file mode is readable\n");
+  if( fileModeReadable(this->mode) != 1 ){
+    printf("Error: File mode is not readable (or it's NULL)\n");
     return NULL; 
   }
-  
-  if(!readable){
-    printf("Error: File is not in a readable mode\n");
-    return NULL; 
-  }
-  
+    
   if(!this->descriptor){
     printf("Error: File is not open\n");
     return NULL;
@@ -284,7 +223,7 @@ static dataContainer *diskFileRead(diskFile *this)
   }
 
   
-  //TODO look into error checking more
+  //TODO look into error checking more TODO and maybe don't read in a single operation? 
   if( fread(dataContainer->data, fileBytesize, COUNT, this->descriptor) != COUNT){
     printf("Error: Failed to read file into data container\n");
     secureFree( &dataContainer->data, dataContainer->bytesize );
@@ -301,19 +240,62 @@ static dataContainer *diskFileRead(diskFile *this)
 
 /******** PRIVATE METHODS *********/
 
-//returns -1 on error
+/*
+ * initializePathProperties returns 0 on error and 1 on success. It initializes this->fullPath and this->fullPathBytesize. Note that this->fullPathBytesize
+ * is one to two bytes larger than the exact memory used to hold the full path, because this->fullPath ends with one to two NULLs depending on if the passed
+ * in path ends with a '/' or not. this->fullPathBytesize is exactly equal to the bytesize of this->fullPath though, counting the terminating NULL(s). 
+ */
+int initializePathProperties(diskFile *this, char *path, char *name)
+{
+  uint32_t  pathBytesize;
+  uint32_t  nameBytesize;
+  
+  if(this == NULL || path == NULL || name == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0;
+  }
+
+  //get string sizes
+  pathBytesize = strlen(path);
+  nameBytesize = strlen(name);
+  
+  // +1 to ensure NULL termination, +1 to ensure room for terminating / if we need to add it. Wastes up to one byte of memory.
+  this->fullPathBytesize = pathBytesize + nameBytesize + 2;  
+  
+  this->fullPath = secureAllocate(this->fullPathBytesize);
+  if(this->fullPath == NULL){
+    printf("Error: Failed to allocate memory for path\n");
+    return 0;
+  }
+     
+  if(path[pathBytesize - 1] != '/'){
+    strncat(this->fullPath, path, pathBytesize);
+    strncat(this->fullPath, "/", 1);
+    strncat(this->fullPath, name, nameBytesize); 
+  }
+  else{
+    strncat(this->fullPath, path, pathBytesize);
+    strncat(this->fullPath, name, nameBytesize); 
+  }
+  
+  return 1; 
+}
+
+
+/*
+ * diskFileOpen returns 0 on error and 1 on success. Sets this->descriptor to an fd for file at this->fullPath opened in mode mode, and sets this->mode to mode. 
+ */
 static int diskFileOpen(diskFile *this, char *mode)
 {
   if( this == NULL || mode == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
-    return -1;
+    return 0;
   }
   
   this->descriptor = fopen( (const char*)this->fullPath, mode );
-  
   if(this->descriptor == NULL){
     printf("Error: Failed to open file\n"); 
-    return -1; 
+    return 0; 
   }
   
   this->mode = mode;
@@ -322,7 +304,9 @@ static int diskFileOpen(diskFile *this, char *mode)
 }
 
 
-//returns -1 on error
+/*
+ * fileModeValid returns -1 on error, 1 if the file mode is valid, and 0 if the file mode isn't valid. 
+ */
 static int fileModeValid(char *mode)
 {
   if(mode == NULL){
@@ -336,7 +320,9 @@ static int fileModeValid(char *mode)
   return 0; 
 }
 
-//returns -1 on error
+/*
+ * fileModeWritable returns -1 on error, 1 if the file mode is writable, and 0 if the file mode isn't writable. 
+ */
 static int fileModeWritable(char *mode)
 {
   if(mode == NULL){
@@ -350,7 +336,9 @@ static int fileModeWritable(char *mode)
   return 0; 
 }
 
-//returns -1 on error
+/*
+ * fileModeSeekable returns -1 on error, 1 if the file mode is seekable, and 0 if the file mode isn't seekable. 
+ */
 static int fileModeSeekable(char *mode)
 {
   if(mode == NULL){
@@ -364,7 +352,9 @@ static int fileModeSeekable(char *mode)
   return 0;
 }
 
-//returns -1 on error
+/*
+ * fileModeReadable returns -1 on error, 1 if the file mode is readable, and 0 if the file mode isn't readable. 
+ */
 static int fileModeReadable(char *mode)
 {
   if(mode == NULL){

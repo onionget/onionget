@@ -31,3 +31,8 @@ enum{  ONION_ADDRESS_BYTESIZE = 22  };
 //client
 
 enum{  DELIMITER_BYTESIZE     = 1   };
+
+
+//diskfile
+
+enum{ COUNT = 1 };
