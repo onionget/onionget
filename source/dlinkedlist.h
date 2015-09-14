@@ -2,9 +2,6 @@
 #include <stdint.h>
 #include "datacontainer.h"
 
-#define DLL_HEAD 0
-#define DLL_TAIL 1
-
 
 typedef struct dllObject
 {

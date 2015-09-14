@@ -37,3 +37,9 @@ enum{  FILE_CHUNK_BYTESIZE    = 1000000 };
 //diskfile
 
 enum{ COUNT = 1 };
+
+
+
+/dlinkedlist
+enum{ DLL_HEAD = 0 };
+enum{ DLL_TAIL = 1 };

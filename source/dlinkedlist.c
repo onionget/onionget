@@ -5,6 +5,7 @@
 #include "datacontainer.h"
 #include "dlinkedlist.h"
 #include "memorymanager.h"
+#include "og_enums.h"
 
 
 //public methods
@@ -117,7 +118,6 @@ static int insert(dll *this, int end, char *id, uint64_t idBytesize, dataContain
  */
 static dllObject *newDllObject(dataContainer *dataContainer, char *id, uint64_t idBytesize)
 { 
-  
   dllObject  *object;
   
   if(dataContainer == NULL || id == NULL){
