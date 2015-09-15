@@ -55,7 +55,7 @@ static int setSocketRecvTimeout           ( router *this            , int timeou
 router *newRouter(void)
 {
   //allocate memory for the router object
-  router *this = secureAllocate(sizeof(struct router));
+  router *this = secureAllocate(sizeof(*this));
   if(this == NULL){
     printf("Error: Failed to allocate memory for router object\n");
     return NULL;  
@@ -105,7 +105,7 @@ static int destroyRouter(router **thisPointer)
     return 0; 
   }
   
-  secureFree(thisPointer, sizeof(struct router)); 
+  secureFree(thisPointer, sizeof(**thisPointer)); 
   return 1; 
 }
 

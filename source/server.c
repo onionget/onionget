@@ -15,14 +15,8 @@
 #include "server.h"
 #include "og_enums.h"
 
-
-enum{  TERMINATING_NULL_HOP        = 1         };
-enum{  MAX_REQUEST_STRING_BYTESIZE = 1000000   };
-enum{  BYTES_IN_A_MEGABYTE         = 1000000   }; 
-
-
 static void *processConnection(void *activeConnectionV);
-int cacheSharedFiles(server *this);
+int prepareSharedFiles(server *this);
 static int serverListen(server *this);
 
 
@@ -39,7 +33,7 @@ server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uin
     return NULL;
   }
   
-  this = secureAllocate(sizeof(struct server));
+  this = secureAllocate(sizeof(*this));
   if(this == NULL){ 
     printf("Error: Failed to allocate memory to instantiate server\n");
     return NULL; 
@@ -67,7 +61,7 @@ server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uin
   //initialize public methods
   this->serverListen = &serverListen; 
   
-  if( !cacheSharedFiles(this) ){
+  if( !prepareSharedFiles(this) ){
     printf("Error: Failed to cache shared files!");
     return NULL; 
   }
@@ -98,7 +92,7 @@ static int serverListen(server *this)
   }
   
   while(1){  
-    activeConnection = secureAllocate(sizeof(struct activeConnection)); 
+    activeConnection = secureAllocate(sizeof(*activeConnection)); 
     if(activeConnection == NULL){
       sleep(1);
       continue; 
@@ -106,7 +100,7 @@ static int serverListen(server *this)
  
     activeConnection->connectedRouter = newRouter(); 
     if(activeConnection->connectedRouter == NULL){
-      secureFree(&activeConnection, sizeof(struct activeConnection)); 
+      secureFree(&activeConnection, sizeof(*activeConnection)); 
       sleep(1);
       continue;
     }
@@ -126,7 +120,7 @@ static int serverListen(server *this)
 	return 0;
       }
      
-      if( !secureFree(&activeConnection, sizeof(struct activeConnection)) ){
+      if( !secureFree(&activeConnection, sizeof(*activeConnection)) ){
 	printf("Error: Failed to free activeConnection object\n");
 	return 0;
       }
@@ -168,7 +162,7 @@ static void *processConnection(void *activeConnectionV)
 
   incomingBytesize  = connectedRouter->getIncomingBytesize(connectedRouter);
   if( incomingBytesize > MAX_REQUEST_STRING_BYTESIZE || incomingBytesize == 0){
-    secureFree(&activeConnection, sizeof(struct activeConnection)); 
+    secureFree(&activeConnection, sizeof(*activeConnection)); 
     connectedRouter->destroyRouter(&connectedRouter);   
     return NULL; 
   }
@@ -176,7 +170,7 @@ static void *processConnection(void *activeConnectionV)
   
   fileRequestString = connectedRouter->receive(connectedRouter, incomingBytesize); 
   if(fileRequestString == NULL){
-    secureFree(&activeConnection, sizeof(struct activeConnection)); 
+    secureFree(&activeConnection, sizeof(*activeConnection)); 
     connectedRouter->destroyRouter(&connectedRouter);   
     return NULL; 
   }
@@ -194,13 +188,13 @@ static void *processConnection(void *activeConnectionV)
     if(!outgoingFile){
       
       if( !connectedRouter->transmitBytesize( connectedRouter, strlen("not found") ) ){
-	secureFree(&activeConnection, sizeof(struct activeConnection)); 
+	secureFree(&activeConnection, sizeof(*activeConnection)); 
         connectedRouter->destroyRouter(&connectedRouter);   
 	return NULL;
       }
       
       if( !connectedRouter->transmit( connectedRouter, "not found", strlen("not found") ) ){
-	secureFree(&activeConnection, sizeof(struct activeConnection)); 
+	secureFree(&activeConnection, sizeof(*activeConnection)); 
         connectedRouter->destroyRouter(&connectedRouter);   
 	return NULL; 
       }
@@ -209,19 +203,19 @@ static void *processConnection(void *activeConnectionV)
     }
     
     if( !connectedRouter->transmitBytesize(connectedRouter, outgoingFile->bytesize) ){
-      secureFree(&activeConnection, sizeof(struct activeConnection)); 
+      secureFree(&activeConnection, sizeof(*activeConnection)); 
       connectedRouter->destroyRouter(&connectedRouter);   
       return NULL;
     }
     
     if (!connectedRouter->transmit(connectedRouter, outgoingFile->data, outgoingFile->bytesize) ){
-      secureFree(&activeConnection, sizeof(struct activeConnection)); 
+      secureFree(&activeConnection, sizeof(*activeConnection)); 
       connectedRouter->destroyRouter(&connectedRouter);   
       return NULL; 
     }
   }
   
-  if( !secureFree(&activeConnection, sizeof(struct activeConnection)) ){
+  if( !secureFree(&activeConnection, sizeof(*activeConnection)) ){
     printf("Error: Failed to free activeConnection object\n");
     return NULL; 
   }
@@ -236,7 +230,7 @@ static void *processConnection(void *activeConnectionV)
 
 
 //returns 0 on error
-int cacheSharedFiles(server *this)
+int prepareSharedFiles(server *this)
 {
   uint64_t      currentlyCachedBytes;
   DIR           *directory; 
@@ -273,7 +267,7 @@ int cacheSharedFiles(server *this)
       return 0;
     }
     
-    //if adding the file to the cache will exhaust the cache space then skip it and try the next file
+    //if adding the file to the cache will exhaust the cache space then don't add it to the linked list
     if( (currentlyCachedBytes + currentFileBytesize) > this->maxMemoryCacheBytesize ){
       printf("Notice: Adding file %s will exhaust available cache, skipping\n", fileEntry->d_name); 
       diskFile->closeTearDown(&diskFile);

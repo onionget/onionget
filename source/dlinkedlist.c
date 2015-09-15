@@ -27,7 +27,7 @@ dll* newDll(void)
 {
   dll *this;
   
-  this = secureAllocate(sizeof(struct dll));
+  this = secureAllocate(sizeof(*this));
   if(this == NULL){
     printf("Error: Failed to allocate memory for linked list\n");
     return NULL; 
@@ -105,7 +105,7 @@ static int insert(dll *this, int end, char *id, uint64_t idBytesize, dataContain
   
   if(!insertSuccess){
     secureFree(&(object->identifier), object->identifierBytesize);
-    secureFree(&object, sizeof(struct dllObject)); 
+    secureFree(&object, sizeof(*object)); 
     printf("Error: Failed to insert object into list\n");
     return 0; 
   }
@@ -132,7 +132,7 @@ static dllObject *newDllObject(dataContainer *dataContainer, char *id, uint64_t 
   }
   
   //allocate the dllObject 
-  object = secureAllocate(sizeof(struct dllObject));
+  object = secureAllocate(sizeof(*object));
   if(object == NULL){
     printf("Error: Failed to allocate memory for linked list object\n");
     return NULL;
@@ -142,7 +142,7 @@ static dllObject *newDllObject(dataContainer *dataContainer, char *id, uint64_t 
   object->identifier = secureAllocate(idBytesize);
   if(object->identifier == NULL){
     printf("Error: Failed to allocate memory for linked list object identified\n");
-    secureFree(&object, sizeof(struct dllObject));
+    secureFree(&object, sizeof(*object));
     return NULL; 
   }
   

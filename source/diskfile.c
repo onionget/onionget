@@ -48,7 +48,7 @@ diskFile *newDiskFile(char *path, char *name, char *mode)
   }
     
   //allocate memory for the object
-  this = secureAllocate(sizeof(struct diskFile)); 
+  this = secureAllocate(sizeof(*this)); 
   if(this == NULL){
     printf("Error: Failed to allocate memory for disk file\n");
     return NULL; 
@@ -63,7 +63,7 @@ diskFile *newDiskFile(char *path, char *name, char *mode)
   if( !diskFileOpen(this, mode) ){
     printf("Error: Failed to open file\n");
     secureFree(&this->fullPath, this->fullPathBytesize);
-    secureFree(&this, sizeof(struct diskFile));
+    secureFree(&this, sizeof(*this));
     return NULL;
   }
   
@@ -146,7 +146,7 @@ static int closeTearDown(diskFile **thisPointer)
   }
   
   
-  if( !secureFree(thisPointer, sizeof(struct diskFile)) ){
+  if( !secureFree(thisPointer, sizeof(**thisPointer)) ){
     printf("Error: Failed to tear down disk file\n");
     return 0;
   }
@@ -224,7 +224,7 @@ static dataContainer *diskFileRead(diskFile *this)
   if( fread(dataContainer->data, fileBytesize, COUNT, this->descriptor) != COUNT){
     printf("Error: Failed to read file into data container\n");
     secureFree( &dataContainer->data, dataContainer->bytesize );
-    secureFree( &dataContainer, sizeof(struct dataContainer)); 
+    secureFree( &dataContainer, sizeof(*dataContainer)); 
     return NULL; 
   }
   

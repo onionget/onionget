@@ -24,7 +24,7 @@ dataContainer* newDataContainer(uint64_t bytesize)
   dataContainer *this;
   
   //allocate memory for data container
-  this = secureAllocate(sizeof(struct dataContainer));
+  this = secureAllocate(sizeof(*this));
   if(this == NULL){
     printf("Error: Failed to allocate memory for data container\n");
     return NULL; 
@@ -34,7 +34,7 @@ dataContainer* newDataContainer(uint64_t bytesize)
   this->data = secureAllocate(bytesize);
   if(this->data == NULL){
     printf("Error: Failed to allocate memory for data\n");
-    secureFree(&this, sizeof(struct dataContainer));
+    secureFree(&this, sizeof(*this));
     return NULL; 
   }
   
@@ -71,7 +71,7 @@ static int destroyDataContainer(dataContainer **thisPointer)
   }
   
   //securely free the object memory
-  if( !secureFree(thisPointer, sizeof(struct dataContainer)) ){
+  if( !secureFree(thisPointer, sizeof(**thisPointer)) ){
     printf("Error: Failed to free data container object\n");
     return 0; 
   }
