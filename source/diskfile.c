@@ -48,7 +48,7 @@ diskFile *newDiskFile(char *path, char *name, char *mode)
   }
     
   //allocate memory for the object
-  this = secureAllocate(sizeof(*this)); 
+  this = (diskFile *)secureAllocate(sizeof(*this)); 
   if(this == NULL){
     printf("Error: Failed to allocate memory for disk file\n");
     return NULL; 
@@ -259,7 +259,7 @@ int initializePathProperties(diskFile *this, char *path, char *name)
   // +1 to ensure NULL termination, +1 to ensure room for terminating / if we need to add it. Wastes up to one byte of memory.
   this->fullPathBytesize = pathBytesize + nameBytesize + 2;  
   
-  this->fullPath = secureAllocate(this->fullPathBytesize);
+  this->fullPath = (char *)secureAllocate(this->fullPathBytesize);
   if(this->fullPath == NULL){
     printf("Error: Failed to allocate memory for path\n");
     return 0;

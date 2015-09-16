@@ -9,7 +9,9 @@
  */
 void *secureAllocate(uint64_t bytesize)
 {
-  void *memory = calloc(1, bytesize);
+  void *memory;
+  
+  memory = calloc(1, bytesize);
   
   if( memory == NULL ){
     printf("Error: Failed to allocate memory!\n");

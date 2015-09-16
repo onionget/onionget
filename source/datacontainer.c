@@ -24,14 +24,14 @@ dataContainer* newDataContainer(uint64_t bytesize)
   dataContainer *this;
   
   //allocate memory for data container
-  this = secureAllocate(sizeof(*this));
+  this = (dataContainer *)secureAllocate(sizeof(*this));
   if(this == NULL){
     printf("Error: Failed to allocate memory for data container\n");
     return NULL; 
   }
   
   //set properties
-  this->data = secureAllocate(bytesize);
+  this->data = (unsigned char *)secureAllocate(bytesize);
   if(this->data == NULL){
     printf("Error: Failed to allocate memory for data\n");
     secureFree(&this, sizeof(*this));

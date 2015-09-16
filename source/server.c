@@ -33,7 +33,7 @@ server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uin
     return NULL;
   }
   
-  this = secureAllocate(sizeof(*this));
+  this = (server *)secureAllocate(sizeof(*this));
   if(this == NULL){ 
     printf("Error: Failed to allocate memory to instantiate server\n");
     return NULL; 
@@ -84,7 +84,7 @@ server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uin
 static int serverListen(server *this)
 {
   pthread_t        processingThread;
-  activeConnection *activeConnection;
+  activeConnection *connection;
   
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -92,35 +92,35 @@ static int serverListen(server *this)
   }
   
   while(1){  
-    activeConnection = secureAllocate(sizeof(*activeConnection)); 
-    if(activeConnection == NULL){
+    connection = (activeConnection*)secureAllocate(sizeof(*connection));
+    if(connection == NULL){
       sleep(1);
       continue; 
     }
  
-    activeConnection->connectedRouter = newRouter(); 
-    if(activeConnection->connectedRouter == NULL){
-      secureFree(&activeConnection, sizeof(*activeConnection)); 
+    connection->connectedRouter = newRouter(); 
+    if(connection->connectedRouter == NULL){
+      secureFree(&connection, sizeof(*connection)); 
       sleep(1);
       continue;
     }
     
-    activeConnection->server = this;
+    connection->server = this;
     
-    if( !activeConnection->connectedRouter->setSocket( activeConnection->connectedRouter, this->listeningRouter->getConnection(this->listeningRouter) ) ){
+    if( !connection->connectedRouter->setSocket( connection->connectedRouter, this->listeningRouter->getConnection(this->listeningRouter) ) ){
       printf("Error: Failed to set active connection router socket\n");
       return 0;
     }
   
     
-    if( pthread_create(&processingThread, NULL, processConnection, (void*)activeConnection) ){
+    if( pthread_create(&processingThread, NULL, processConnection, (void*)connection) ){
       
-      if( !activeConnection->connectedRouter->destroyRouter(&activeConnection->connectedRouter) ){
+      if( !connection->connectedRouter->destroyRouter(&connection->connectedRouter) ){
 	printf("Error: Failed to destroy router object\n");
 	return 0;
       }
      
-      if( !secureFree(&activeConnection, sizeof(*activeConnection)) ){
+      if( !secureFree(&connection, sizeof(*connection)) ){
 	printf("Error: Failed to free activeConnection object\n");
 	return 0;
       }
@@ -137,9 +137,9 @@ static int serverListen(server *this)
 /****************** PRIVATE METHODS *******************/
 
 
-static void *processConnection(void *activeConnectionV)
+static void *processConnection(void *connectionV)
 {
-  activeConnection *activeConnection;
+  activeConnection *connection;
   dataContainer    *outgoingFile; 
   dataContainer    *fileRequestString; 
   uint32_t         incomingBytesize;
@@ -148,21 +148,21 @@ static void *processConnection(void *activeConnectionV)
   uint32_t         currentSectionBytesize;
   char             *currentSection;
 
-  if(activeConnectionV == NULL){
+  if(connectionV == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return NULL; 
   }
   
   currentSection = NULL; 
   
-  activeConnection = activeConnectionV; //TODO why doesn't casting this work
-  server           = activeConnection->server;
-  connectedRouter  = activeConnection->connectedRouter; 
+  connection       = (activeConnection*)connectionV; 
+  server           = connection->server;
+  connectedRouter  = connection->connectedRouter; 
   
 
   incomingBytesize  = connectedRouter->getIncomingBytesize(connectedRouter);
   if( incomingBytesize > MAX_REQUEST_STRING_BYTESIZE || incomingBytesize == 0){
-    secureFree(&activeConnection, sizeof(*activeConnection)); 
+    secureFree(&connection, sizeof(*connection)); 
     connectedRouter->destroyRouter(&connectedRouter);   
     return NULL; 
   }
@@ -170,7 +170,7 @@ static void *processConnection(void *activeConnectionV)
   
   fileRequestString = connectedRouter->receive(connectedRouter, incomingBytesize); 
   if(fileRequestString == NULL){
-    secureFree(&activeConnection, sizeof(*activeConnection)); 
+    secureFree(&connection, sizeof(*connection)); 
     connectedRouter->destroyRouter(&connectedRouter);   
     return NULL; 
   }
@@ -188,13 +188,13 @@ static void *processConnection(void *activeConnectionV)
     if(!outgoingFile){
       
       if( !connectedRouter->transmitBytesize( connectedRouter, strlen("not found") ) ){
-	secureFree(&activeConnection, sizeof(*activeConnection)); 
+	secureFree(&connection, sizeof(*connection)); 
         connectedRouter->destroyRouter(&connectedRouter);   
 	return NULL;
       }
       
       if( !connectedRouter->transmit( connectedRouter, "not found", strlen("not found") ) ){
-	secureFree(&activeConnection, sizeof(*activeConnection)); 
+	secureFree(&connection, sizeof(*connection)); 
         connectedRouter->destroyRouter(&connectedRouter);   
 	return NULL; 
       }
@@ -203,19 +203,19 @@ static void *processConnection(void *activeConnectionV)
     }
     
     if( !connectedRouter->transmitBytesize(connectedRouter, outgoingFile->bytesize) ){
-      secureFree(&activeConnection, sizeof(*activeConnection)); 
+      secureFree(&connection, sizeof(*connection)); 
       connectedRouter->destroyRouter(&connectedRouter);   
       return NULL;
     }
     
     if (!connectedRouter->transmit(connectedRouter, outgoingFile->data, outgoingFile->bytesize) ){
-      secureFree(&activeConnection, sizeof(*activeConnection)); 
+      secureFree(&connection, sizeof(*connection)); 
       connectedRouter->destroyRouter(&connectedRouter);   
       return NULL; 
     }
   }
   
-  if( !secureFree(&activeConnection, sizeof(*activeConnection)) ){
+  if( !secureFree(&connection, sizeof(*connection)) ){
     printf("Error: Failed to free activeConnection object\n");
     return NULL; 
   }

@@ -41,7 +41,7 @@ client *newClient(char *torBindAddress, char *torPort, char *onionAddress, char 
   }
 
   //allocate memory for the client object
-  this = secureAllocate(sizeof(*this));
+  this = (client *)secureAllocate(sizeof(*this));
   if(this == NULL){
    printf("Error: Failed to instantiate a client\n");
    return NULL; 

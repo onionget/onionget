@@ -55,7 +55,7 @@ static int setSocketRecvTimeout           ( router *this            , int timeou
 router *newRouter(void)
 {
   //allocate memory for the router object
-  router *this = secureAllocate(sizeof(*this));
+  router *this = (router *)secureAllocate(sizeof(*this));
   if(this == NULL){
     printf("Error: Failed to allocate memory for router object\n");
     return NULL;  
@@ -165,7 +165,7 @@ static uint32_t getIncomingBytesize(router *this)
   }
   
   //receive the number of incoming bytes, which is encoded as a uint32_t
-  incomingBytesizeContainer = this->receive(this, sizeof(uint32_t));
+  incomingBytesizeContainer = this->receive(this, sizeof(incomingBytesize));
   if(incomingBytesizeContainer == NULL){
     printf("Error: Failed to get incoming bytesize\n");
     return -1;  
@@ -237,7 +237,7 @@ static int transmitBytesize(router *this, uint32_t bytesize)
   bytesizeEncoded = htonl(bytesize);
   
   //transmit the bytesize over the connected socket
-  if( !this->transmit(this, &bytesizeEncoded, sizeof(uint32_t)) ){
+  if( !this->transmit(this, &bytesizeEncoded, sizeof(bytesizeEncoded)) ){
     printf("Error: Failed to transmit bytesize\n");
     return 0; 
   }
