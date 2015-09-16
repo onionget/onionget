@@ -311,7 +311,7 @@ static int fileModeValid(char *mode)
     return -1; 
   }
   
-  if(  !memcmp(mode, "w", 1) | !memcmp(mode, "a", 1) | !memcmp(mode, "r+", 2) | !memcmp(mode, "w+", 2) | !memcmp(mode, "a+", 2) | !memcmp(mode, "r", 1) ){
+  if(  !memcmp(mode, "w", 1) || !memcmp(mode, "a", 1) || !memcmp(mode, "r+", 2) || !memcmp(mode, "w+", 2) || !memcmp(mode, "a+", 2) || !memcmp(mode, "r", 1) ){
     return 1; 
   } 
   return 0; 
@@ -327,7 +327,7 @@ static int fileModeWritable(char *mode)
     return -1; 
   }
   
-  if(  !memcmp(mode, "w", 1) | !memcmp(mode, "a", 1) | !memcmp(mode, "r+", 2) | !memcmp(mode, "w+", 2) | !memcmp(mode, "a+", 2) ){
+  if(  !memcmp(mode, "w", 1) || !memcmp(mode, "a", 1) || !memcmp(mode, "r+", 2) || !memcmp(mode, "w+", 2) || !memcmp(mode, "a+", 2) ){
    return 1; 
   }
   return 0; 
@@ -343,7 +343,7 @@ static int fileModeSeekable(char *mode)
     return -1; 
   }
   
-  if( !memcmp(mode, "w", 1) | !memcmp(mode, "r+", 2) | !memcmp(mode, "w+", 2) | !memcmp(mode, "r", 1) ){
+  if( !memcmp(mode, "w", 1) || !memcmp(mode, "r+", 2) || !memcmp(mode, "w+", 2) || !memcmp(mode, "r", 1) ){
     return 1;
   }
   return 0;
@@ -359,7 +359,7 @@ static int fileModeReadable(char *mode)
     return -1; 
   }
   
-  if( !memcmp(mode, "r", 1) | !memcmp(mode, "r+", 2) | !memcmp(mode, "w+", 2) | !memcmp(mode, "a+", 2) ){
+  if( !memcmp(mode, "r", 1) || !memcmp(mode, "r+", 2) || !memcmp(mode, "w+", 2) || !memcmp(mode, "a+", 2) ){
    return 1; 
   }
   return 0; 
