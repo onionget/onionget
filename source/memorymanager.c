@@ -11,6 +11,11 @@ void *secureAllocate(uint64_t bytesize)
 {
   void *memory;
   
+  if(bytesize == 0){
+    printf("Error: Cannot allocate 0 bytes of memory\n");
+    return NULL; 
+  }
+  
   memory = calloc(1, bytesize);
   
   if( memory == NULL ){
