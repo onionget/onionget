@@ -28,7 +28,9 @@ void *secureAllocate(uint64_t bytesize)
 
 /*
  * When passed a void** that dereferences to a void* pointing to bytesize bytes, secureFree first clears the buffer pointed to by setting it to all nuills
- * and then it points the pointer to NULL. Returns 1 on success and 0 on error.  NOTE that memory must be a void** despite being a void* in the definition. 
+ * and then it points the pointer to NULL. Returns 1 on success and 0 on error.  NOTE that memory must be a void** despite being a void* in the definition. TODO make sure pointer arithmetic is correct 
+ * TODO make sure memory barrier is correctly implemented, and generally just look really close at this function, preferably replace it with one of the standards
+ * for memory zero 
  */
 int secureFree(void *memory, uint64_t bytesize)
 {
@@ -40,6 +42,7 @@ int secureFree(void *memory, uint64_t bytesize)
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
+
   
   memoryCorrectCast = (void**)memory; 
   
@@ -48,6 +51,8 @@ int secureFree(void *memory, uint64_t bytesize)
   deoptimizedDataPointer = dataBuffer;
   
   while(bytesize--) *deoptimizedDataPointer++ = 0;
+  
+  __asm__ __volatile__ ( "" : : "r"(dataBuffer) : "memory" );
   
   free(dataBuffer);
   
