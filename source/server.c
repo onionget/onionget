@@ -202,66 +202,33 @@ static void *processConnection(void *connectionV)
   
   //get the total incoming bytesize, perform basic sanity check
   totalBytesize = connection->connectedRouter->getIncomingBytesize(connection->connectedRouter); 
-  if(totalBytesize > MAX_REQUEST_STRING_BYTESIZE || totalBytesize == 0){
-    connection->connectedRouter->destroyRouter(&connection->connectedRouter); 
-    secureFree(&connection, sizeof(*connection));
-    return NULL; 
-  }
+  if(totalBytesize > MAX_REQUEST_STRING_BYTESIZE || totalBytesize == 0) goto cleanup; 
   
   //go through all of the incoming bytes and process accordingly
   for(sectionBytesize = 0 ; totalBytesize > 0; totalBytesize -= sectionBytesize + sizeof(uint32_t)){
     
     //get the bytesize of the incoming requested file name and perform basic sanity checks
     sectionBytesize = connection->connectedRouter->getIncomingBytesize(connection->connectedRouter); 
-    if(sectionBytesize > MAX_SECTION_BYTESIZE || sectionBytesize == 0){
-      connection->connectedRouter->destroyRouter(&connection->connectedRouter); 
-      secureFree(&connection, sizeof(*connection)); 
-      return NULL; 
-    }
+    if(sectionBytesize > MAX_SECTION_BYTESIZE || sectionBytesize == 0) goto cleanup; 
         
     currentFileId = connection->connectedRouter->receive(connection->connectedRouter, sectionBytesize); 
-    if(currentFileId == NULL){
-      connection->connectedRouter->destroyRouter(&connection->connectedRouter);     
-      secureFree(&connection, sizeof(*connection));
-      return NULL; 
-    }
+    if(currentFileId == NULL) goto cleanup; 
     
     outgoingFile = connection->server->cachedSharedFiles->getId(connection->server->cachedSharedFiles, currentFileId->data, currentFileId->bytesize);
-    if(!outgoingFile && !sendFileNotFound(connection)){ //using short circuiting to avoid nested if
-     connection->connectedRouter->destroyRouter(&connection->connectedRouter);     
-     secureFree(&connection, sizeof(*connection));
-     return NULL; 
-    }
+    if(!outgoingFile && !sendFileNotFound(connection)) goto cleanup; 
     else if(!outgoingFile){
       continue; //todo something clean up lolol
     }
     
-    if( !connection->connectedRouter->transmitBytesize(connection->connectedRouter, outgoingFile->bytesize) ){
-     connection->connectedRouter->destroyRouter(&connection->connectedRouter);     
-     secureFree(&connection, sizeof(*connection));
-     return NULL; 
-    }
-    
-    if( !connection->connectedRouter->transmit(connection->connectedRouter, outgoingFile->data, outgoingFile->bytesize) ){
-     connection->connectedRouter->destroyRouter(&connection->connectedRouter);     
-     secureFree(&connection, sizeof(*connection));
-     return NULL; 
-    }
+    if( !connection->connectedRouter->transmitBytesize(connection->connectedRouter, outgoingFile->bytesize) )             goto cleanup;
+    if( !connection->connectedRouter->transmit(connection->connectedRouter, outgoingFile->data, outgoingFile->bytesize) ) goto cleanup; 
   }
     
-  if( !connection->connectedRouter->destroyRouter(&connection->connectedRouter) ){
-    printf("Error: Failed to destroy router object\n");
-    return NULL; 
-  }
-  
-    
-  if( !secureFree(&connection, sizeof(*connection)) ){
-    printf("Error: Failed to free activeConnection object\n");
-    return NULL; 
-  }
-  
-  return NULL; 
-    
+
+  cleanup:  
+   if( !connection->connectedRouter->destroyRouter(&connection->connectedRouter) ) printf("Error: Failed to destroy router object\n"); 
+   if( !secureFree(&connection, sizeof(*connection)) )                             printf("Error: Failed to free connection object\n");
+   return NULL;  
 }
   
   
