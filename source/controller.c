@@ -21,6 +21,7 @@ static int initializeServer(int argc, char *argv[]);
 
 
 //TODO refactor this to take into account some functions never return, and clean up in general where showhelpexit is and how it works etc
+
 int main(int argc, char *argv[])
 {
   int successIndicated = 0; 

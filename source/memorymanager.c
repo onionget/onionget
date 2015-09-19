@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include "memorymanager.h"
 
+static int memoryClear(volatile unsigned char *memoryPointer, uint64_t bytesize);
+
 /*
  * secureAllocate returns NULL on error, otherwise returns a pointer to the allocated memory buffer, which is bytesize bytes and initialized to NULL. 
  */
@@ -27,18 +29,53 @@ void *secureAllocate(uint64_t bytesize)
 }
 
 /*
- * When passed a void** that dereferences to a void* pointing to bytesize bytes, secureFree first clears the buffer pointed to by setting it to all nuills
- * and then it points the pointer to NULL. Returns 1 on success and 0 on error.  NOTE that memory must be a void** despite being a void* in the definition. TODO make sure pointer arithmetic is correct 
- * TODO make sure memory barrier is correctly implemented, and generally just look really close at this function, preferably replace it with one of the standards
- * for memory zero TODO make sure volatile use conforms with EXP32-C
+ * returns 1 on success and 0 on error
+ * 
+ * memoryClear is passed a volatile unsigned char* pointing to bytesize bytes, clears each byte by setting to 0
+ * 
+ * implemented because the memset solution in MEM03-C causes compiler warnings, this should do the same thing without
+ * compiler warning 
+ */
+static int memoryClear(volatile unsigned char *memoryPointer, uint64_t bytesize)
+{
+  if(memoryPointer == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0; 
+  }
+  
+  while(bytesize--){
+    *memoryPointer++ = 0;
+  }
+  
+  return 1; 
+}
+
+
+/* NOTE: memoryPointerPointer must be a void** despite being a void* in the function definition 
+ * 
+ * Returns 1 on success and 0 on error 
+ * 
+ * Passed a void* that casts to a void** that points to a pointer pointing to bytesize bytes, sets each byte to NULL in compliance with MEM03-C, 
+ * frees the memory, and points the pointer to NULL
+ * 
+ * Superficial testing confirms memory is freed, pointer is set to NULL, and memory is cleared, though more in depth testing of memory cleared is required
+ * TODO: preferably the memory clearing function will be replaced with explicit_bzero, memset_s, memzero_explicit, or similar, or at least the custom 
+ * implementation will be verified as not optimized out, however using a volatile pointer in compliance with MEM03-C, and also using a memory barried as 
+ * suggested by various security experts. 
+ * 
+ * TODO: Make sure volatile pointer usage is in compliance with EXP32-C 
+ * 
  */
 int secureFree(void *memory, uint64_t bytesize)
 {
-  volatile unsigned char *deoptimizedDataPointer;
-  unsigned char          *dataBuffer;
-  void                   **memoryCorrectCast;
+  void                   **memoryCorrectCast; 
+  volatile unsigned char *dataBuffer;
+
+  //this function is actually passed a void**, declared void* in function definition for technical reasons
+  memoryCorrectCast = (void**)memory; 
   
-  if(memory == NULL){
+  //basic sanity checks
+  if(*memoryCorrectCast == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
@@ -48,19 +85,23 @@ int secureFree(void *memory, uint64_t bytesize)
     return 0;
   }
 
-  
-  memoryCorrectCast = (void**)memory; 
-  
-  dataBuffer = *(unsigned char**)memoryCorrectCast; 
-  
-  deoptimizedDataPointer = dataBuffer;
-  
-  while(bytesize--) *deoptimizedDataPointer++ = 0;
-  
+  //prepare to clear memory buffer
+  dataBuffer = *(volatile unsigned char**)memoryCorrectCast; 
+    
+  //clear memory buffer, volatile pointer in compliance with MEM03-C
+  if( !memoryClear(dataBuffer, bytesize) ){
+    printf("Error: Failed to clear memory buffer\n");
+    return 0;
+  }
+
+  //attempt to ensure that memory clear is not optimized out
+  //memory barrier in compliance with https://sourceware.org/ml/libc-alpha/2014-12/msg00506.html
   __asm__ __volatile__ ( "" : : "r"(dataBuffer) : "memory" );
   
-  free(dataBuffer);
+  //tested with valgrind as correctly freeing memory
+  free(*memoryCorrectCast);
   
+  //tested to confirm proper pointer set to NULL in compliance with MEM01-C
   *memoryCorrectCast = NULL; 
   
   return 1; 
