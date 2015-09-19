@@ -175,7 +175,7 @@ static int getIncomingFile(client *this, diskFile *diskFile)
   
   //the server sends us the incoming file's bytesize
   incomingFileBytesize = this->router->getIncomingBytesize(this->router); 
-  if(incomingFileBytesize == -1){
+  if(!incomingFileBytesize){
     printf("Error: Failed to get incoming file bytesize, aborting\n");
     return 0;
   }

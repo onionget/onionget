@@ -153,7 +153,8 @@ static dataContainer *receive(router *this, uint32_t payloadBytesize)
 /*
  * getIncomingBytesize receives an incoming uint32_t that encodes the number of subsequent incoming bytes. 
  * NOTE: That this function assumes the interlocutor sends a uint32_t encoding the number of subsequent incoming bytes.
- * -1 is returned on error, otherwise the number of subsequent incoming bytes in host encoding.
+ * 
+ * returns 0 on error, note that 0 is also an invalid bytesize for the client to send (TODO: maybe set errno or something) 
  */
 static uint32_t getIncomingBytesize(router *this)
 {
@@ -163,14 +164,14 @@ static uint32_t getIncomingBytesize(router *this)
   //basic sanity check
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
-    return -1; 
+    return 0; 
   }
   
   //receive the number of incoming bytes, which is encoded as a uint32_t
   incomingBytesizeContainer = this->receive(this, sizeof(uint32_t));
   if(incomingBytesizeContainer == NULL){
     printf("Error: Failed to get incoming bytesize\n");
-    return -1;  
+    return 0;  
   }
   
   //properly encode the number of incoming bytes
@@ -179,7 +180,7 @@ static uint32_t getIncomingBytesize(router *this)
   //destroy the dataContainer holding the traffic we just received from the network
   if( !incomingBytesizeContainer->destroyDataContainer(&incomingBytesizeContainer) ){
     printf("Error: Failed to destroy data container\n");
-    return -1; 
+    return 0; 
   }
   
   //return the host encoded incoming bytesize 
