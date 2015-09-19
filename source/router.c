@@ -140,6 +140,8 @@ static dataContainer *receive(router *this, uint32_t payloadBytesize)
   for(bytesReceived = 0, recvReturn = 0; bytesReceived != payloadBytesize; bytesReceived += recvReturn){
     recvReturn = recv(this->socket, &(receivedMessage->data[bytesReceived]), payloadBytesize - bytesReceived, 0);     
     if(recvReturn == -1 || recvReturn == 0){ 
+      secureFree(&receivedMessage->data, payloadBytesize);
+      secureFree(receivedMessage, sizeof(*receivedMessage)); 
       printf("Error: Failed to receive bytes\n");
       return NULL; 
     }     

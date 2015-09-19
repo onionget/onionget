@@ -20,6 +20,7 @@ int prepareSharedFiles(server *this);
 static int serverListen(server *this);
 static activeConnection *getConnectionObject(server *this);
 
+static int sendFileNotFound(activeConnection *connection);
 
 //0         1               2               3                    4
 //[exe] [server address] [server port] [shared folder path] [memory cache megabyte size (max 4294)] 
@@ -185,96 +186,108 @@ static activeConnection *getConnectionObject(server *this)
 static void *processConnection(void *connectionV)
 {
   activeConnection *connection;
+  uint32_t         totalBytesize;
+  uint32_t         sectionBytesize; 
+  dataContainer    *currentFileId;
   dataContainer    *outgoingFile; 
-  dataContainer    *fileRequestString; 
-  uint32_t         incomingBytesize;
-  server           *server;
-  router           *connectedRouter; 
-  uint32_t         currentSectionBytesize;
-  char             *currentSection;
-  char             *placeHolder; 
-
+  
+  //basic sanity check
   if(connectionV == NULL){
-    printf("Error: Something was NULL that shouldn't have beenaa\n");
+    printf("Error: Something was NULL that shouldn't have been\n");
     return NULL; 
   }
   
-  currentSection   = NULL; 
+  //give the connectionV the correct cast
+  connection = (activeConnection*)connectionV;
   
-  connection       = (activeConnection*)connectionV; 
-  server           = connection->server;
-  connectedRouter  = connection->connectedRouter; 
-  
-
-  incomingBytesize  = connectedRouter->getIncomingBytesize(connectedRouter);
-  if( incomingBytesize > MAX_REQUEST_STRING_BYTESIZE || incomingBytesize == 0){
-    secureFree(&connection, sizeof(*connection)); 
-    connectedRouter->destroyRouter(&connectedRouter);   
-    return NULL; 
-  }
-
-  
-  fileRequestString = connectedRouter->receive(connectedRouter, incomingBytesize); 
-  if(fileRequestString == NULL){
-    secureFree(&connection, sizeof(*connection)); 
-    connectedRouter->destroyRouter(&connectedRouter);   
+  //get the total incoming bytesize, perform basic sanity check
+  totalBytesize = connection->connectedRouter->getIncomingBytesize(connection->connectedRouter); 
+  if(totalBytesize > MAX_REQUEST_STRING_BYTESIZE || totalBytesize == 0){
+    connection->connectedRouter->destroyRouter(&connection->connectedRouter); 
+    secureFree(&connection, sizeof(*connection));
     return NULL; 
   }
   
-  placeHolder = secureAllocate(incomingBytesize); 
-  
-  //NOTE: Enforce NULL termination of request string, this is vital for security 
-  memset( &(fileRequestString->data[fileRequestString->bytesize - 1]), '\0', 1); 
-
-  
-  
-  for( currentSection = strtok_r( (char*)(fileRequestString->data), "/", &placeHolder) ; currentSection != NULL ; currentSection = strtok_r(NULL, "/", &placeHolder) ){
- 
-    currentSectionBytesize = strlen(currentSection);
+  //go through all of the incoming bytes and process accordingly
+  for(sectionBytesize = 0 ; totalBytesize > 0; totalBytesize -= sectionBytesize + sizeof(uint32_t)){
     
-    outgoingFile = server->cachedSharedFiles->getId(server->cachedSharedFiles, currentSection, currentSectionBytesize);
-    if(!outgoingFile){
-      
-      if( !connectedRouter->transmitBytesize( connectedRouter, strlen("not found") ) ){
-	secureFree(&connection, sizeof(*connection)); 
-        connectedRouter->destroyRouter(&connectedRouter);   
-	return NULL;
-      }
-      
-      if( !connectedRouter->transmit( connectedRouter, "not found", strlen("not found") ) ){
-	secureFree(&connection, sizeof(*connection)); 
-        connectedRouter->destroyRouter(&connectedRouter);   
-	return NULL; 
-      }
-      
-      continue;
-    }
-    
-    if( !connectedRouter->transmitBytesize(connectedRouter, outgoingFile->bytesize) ){
+    //get the bytesize of the incoming requested file name and perform basic sanity checks
+    sectionBytesize = connection->connectedRouter->getIncomingBytesize(connection->connectedRouter); 
+    if(sectionBytesize > MAX_SECTION_BYTESIZE || sectionBytesize == 0){
+      connection->connectedRouter->destroyRouter(&connection->connectedRouter); 
       secureFree(&connection, sizeof(*connection)); 
-      connectedRouter->destroyRouter(&connectedRouter);   
-      return NULL;
-    }
-    
-    if (!connectedRouter->transmit(connectedRouter, outgoingFile->data, outgoingFile->bytesize) ){
-      secureFree(&connection, sizeof(*connection)); 
-      connectedRouter->destroyRouter(&connectedRouter);   
       return NULL; 
     }
+        
+    currentFileId = connection->connectedRouter->receive(connection->connectedRouter, sectionBytesize); 
+    if(currentFileId == NULL){
+      connection->connectedRouter->destroyRouter(&connection->connectedRouter);     
+      secureFree(&connection, sizeof(*connection));
+      return NULL; 
+    }
+    
+    outgoingFile = connection->server->cachedSharedFiles->getId(connection->server->cachedSharedFiles, currentFileId->data, currentFileId->bytesize);
+    if(!outgoingFile && !sendFileNotFound(connection)){ //using short circuiting to avoid nested if
+     connection->connectedRouter->destroyRouter(&connection->connectedRouter);     
+     secureFree(&connection, sizeof(*connection));
+     return NULL; 
+    }
+    else if(!outgoingFile){
+      continue; //todo something clean up lolol
+    }
+    
+    if( !connection->connectedRouter->transmitBytesize(connection->connectedRouter, outgoingFile->bytesize) ){
+     connection->connectedRouter->destroyRouter(&connection->connectedRouter);     
+     secureFree(&connection, sizeof(*connection));
+     return NULL; 
+    }
+    
+    if( !connection->connectedRouter->transmit(connection->connectedRouter, outgoingFile->data, outgoingFile->bytesize) ){
+     connection->connectedRouter->destroyRouter(&connection->connectedRouter);     
+     secureFree(&connection, sizeof(*connection));
+     return NULL; 
+    }
+  }
+    
+  if( !connection->connectedRouter->destroyRouter(&connection->connectedRouter) ){
+    printf("Error: Failed to destroy router object\n");
+    return NULL; 
   }
   
-  
+    
   if( !secureFree(&connection, sizeof(*connection)) ){
     printf("Error: Failed to free activeConnection object\n");
     return NULL; 
   }
- 
-  if( !connectedRouter->destroyRouter(&connectedRouter) ){
-    printf("Error: Failed to destroy router object\n");
-    return NULL; 
-  }
-
+  
   return NULL; 
+    
+}
+  
+  
+
+  
+  
+  
+   
+
+  
+
+
+
+
+
+static int sendFileNotFound(activeConnection *connection)
+{
+  if( !connection->connectedRouter->transmitBytesize( connection->connectedRouter, strlen("not found") ) ){ 
+    return 0;
+  }
+      
+  if( !connection->connectedRouter->transmit( connection->connectedRouter, "not found", strlen("not found") ) ){
+    return 0; 
+  }
+    
+  return 1; 
 }
 
 

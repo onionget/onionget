@@ -7,7 +7,6 @@
 
 typedef struct client{
   router        *router;
-  dataContainer *fileRequestString;
   char          *torBindAddress;
   char          *torPort;
   char          *onionAddress;

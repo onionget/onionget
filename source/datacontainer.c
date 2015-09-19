@@ -31,7 +31,7 @@ dataContainer* newDataContainer(size_t bytesize)
   }
   
   //set properties
-  this->data = (unsigned char *)secureAllocate(bytesize);
+  this->data = (char*) secureAllocate(bytesize);
   if(this->data == NULL){
     printf("Error: Failed to allocate memory for data\n");
     secureFree(&this, sizeof(*this));

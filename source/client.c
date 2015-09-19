@@ -12,15 +12,14 @@
 #include "og_enums.h" 
 
 //PUBLIC METHODS
-static int            executeOperation(client *this);
-static int            getFiles(client *this);
+static int        executeOperation(client *this);
+static int        getFiles(client *this);
 
 //PRIVATE METHODS
-static int            establishConnection(client *this);
-static int            prepareFileRequestString(client *this);
-static uint32_t       calculateFileRequestStringBytesize(client *this);
-static int            sendRequestString(client *this);
-static int            getIncomingFile(client *this, diskFile *diskFile);
+static int        establishConnection(client *this);
+static uint32_t   calculateFileRequestStringBytesize(client *this);
+static int        sendRequestString(client *this);
+static int        getIncomingFile(client *this, diskFile *diskFile);
 
 
 
@@ -68,14 +67,7 @@ client *newClient(char *torBindAddress, char *torPort, char *onionAddress, char 
   this->getFiles         = &getFiles;
   this->executeOperation = &executeOperation;
 
-  
-  //prepare the file request string
-  if( !prepareFileRequestString(this) ){
-    printf("Error: Failed to instantiate a client\n");
-    return NULL; 
-  }
-     
-     
+      
   //connect client to the hidden service
   if( !establishConnection(this) ){
     printf("Error: Failed to instantiate a client\n");
@@ -223,24 +215,45 @@ static int getIncomingFile(client *this, diskFile *diskFile)
 /*
  * sendRequestString returns 0 on error and 1 on success, it sends the already initialized file request string to the server
  */
+
+
+//[request string bytesize][first filename bytesize][first file name][second filename bytesize][second file name]
+
 static int sendRequestString(client *this)
 {
+  uint32_t fileRequestStringBytesize;
+  uint32_t currentFile;
+  
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
   
+  fileRequestStringBytesize = calculateFileRequestStringBytesize(this);
+  if(fileRequestStringBytesize == -1){
+    printf("Error: failed to calculate file request string bytesize\n");
+    return 0; 
+  }
+  
   //let the server know the bytesize of the request string
-  if( !this->router->transmitBytesize(this->router, this->fileRequestString->bytesize) ){
+  if( !this->router->transmitBytesize(this->router, fileRequestStringBytesize) ){
     printf("Error: Failed to transmit request string\n");
     return 0;
   }
   
-  //then send the server the request string
-  if( !this->router->transmit(this->router, this->fileRequestString->data, this->fileRequestString->bytesize) ){
-    printf("Error: Failed to transmit request string\n");
-    return 0;
+  //send the server the requested file file file names TODO clean this up (ie: don't take strlen twice)  
+  for(currentFile = 0; currentFile != this->fileCount; currentFile++){
+    if(!this->router->transmitBytesize(this->router, strlen(this->fileNames[currentFile])) ){
+      printf("Error: Failed to send server file name bytesize\n");
+      return 0; 
+    }
+    
+    if(!this->router->transmit(this->router, this->fileNames[currentFile], strlen(this->fileNames[currentFile])) ){
+      printf("Error: Failed to send server file name"); 
+      return 0; 
+    } 
   }
+  
   
   return 1; 
 }
@@ -262,59 +275,15 @@ static uint32_t calculateFileRequestStringBytesize(client *this)
   
   //get bytesize of each requested file name and add it to the file request strings total bytesize + 1 byte each for the delimiter
   for( fileCount = this->fileCount, currentFile = 0, fileRequestStringBytesize = 0 ; fileCount-- ; currentFile++ ){
-    fileRequestStringBytesize += strlen(this->fileNames[currentFile]) + DELIMITER_BYTESIZE;
+    fileRequestStringBytesize += sizeof(uint32_t) + strlen(this->fileNames[currentFile]);
   }
   
   //return the fileRequestStringBytesize
   return fileRequestStringBytesize;
 }
 
-/*
- * prepareFileRequestString returns 0 on error and 1 on success. It initializes the file request string property of the client object.  
- */
-static int prepareFileRequestString(client *this)
-{
-  uint32_t   fileRequestStringBytesize; 
-  uint32_t   currentFile; 
-  uint32_t   currentWriteLocation; 
-  uint32_t   sectionBytesize; 
-  uint32_t   fileCount;
-  
-  if(this == NULL){
-    printf("Error: something was NULL that shouldn't have been\n"); 
-    return 0;
-  }
-  
-  //calculate the bytesize of the file request string
-  fileRequestStringBytesize = calculateFileRequestStringBytesize(this); 
-  if(fileRequestStringBytesize == -1){
-    printf("Error: Failed to compute file request string bytesize\n");
-    return 0;
-  }
-  
-  //make a dataContainer object for holding the file request string
-  this->fileRequestString = newDataContainer(fileRequestStringBytesize); 
-  if(this->fileRequestString == NULL){
-    printf("Error: Failed to allocate memory for file request string\n");
-    return 0; 
-  }
-  
-  //go through the file names and concatenate them together separated by the '/' delimiter
-  //preformat: "fileName/AnotherName/yetAnother/"
-  for(fileCount = this->fileCount, currentFile = 0, currentWriteLocation = 0; fileCount-- ; currentFile++){ 
-    sectionBytesize = strlen(this->fileNames[currentFile]);
-    memcpy( &(this->fileRequestString->data[currentWriteLocation]), this->fileNames[currentFile], sectionBytesize);
-    currentWriteLocation += sectionBytesize;
-    memcpy( &(this->fileRequestString->data[currentWriteLocation]), "/", DELIMITER_BYTESIZE);
-    currentWriteLocation += DELIMITER_BYTESIZE; 
-  }
-  
-  //however, the string must be null terminated, this is enforced at the server end, but we set it here as well 
-  //final format: "fileName/AnotherName/yetAnother\0" 
-  memcpy( &(this->fileRequestString->data[currentWriteLocation - 1]), "\0", 1);
-  
-  return 1; 
-}
+
+ 
 
 /*
  * establishConnection returns 0 on error and 1 on success, it connects the client object to the server 

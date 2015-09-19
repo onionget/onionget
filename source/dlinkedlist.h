@@ -17,7 +17,7 @@ typedef struct dll{
   struct dllObject *tail;
   size_t           bytesize;
   
-  dataContainer *(*getId)(struct dll* this, char* id, size_t idBytesize); 
+  dataContainer *(*getId)(struct dll* this, char* id, uint32_t idBytesize); 
   int          (*insert)(struct dll* this, int end, char* id, size_t idBytesize, dataContainer* dataContainer);  
 }dll;
 

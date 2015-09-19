@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 typedef struct dataContainer{
-  unsigned char* data;
+  char* data;
   size_t bytesize;
   
   int (*destroyDataContainer)(struct dataContainer** thisPointer);

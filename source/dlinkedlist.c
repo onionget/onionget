@@ -10,7 +10,7 @@
 
 //public methods
 static int insert(dll  *this, int end, char *id, size_t idBytesize, dataContainer *dataContainer);
-static dataContainer   *getId(dll *this, char *id, size_t idBytesize);
+static dataContainer   *getId(dll *this, char *id, uint32_t idBytesize);
 
 //private methods
 static int       insertInitial(dll *this, dllObject *object);
@@ -49,7 +49,7 @@ dll* newDll(void)
 /*
  *  getId returns NULL if an error occurs or the item identified by id is not found in the list. On success it returns a pointer to to requested dataContainer.
  */
-static dataContainer *getId(dll *this, char *id, size_t idBytesize)
+static dataContainer *getId(dll *this, char *id, uint32_t idBytesize)
 {
   dllObject *currentObject;
   
