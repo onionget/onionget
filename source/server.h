@@ -14,10 +14,7 @@ typedef struct server{
   int (*serverListen)(struct server* this); 
 }server;
 
-typedef struct activeConnection{
-  server *server;
-  router *connectedRouter; 
-}activeConnection; 
+
 
 
 

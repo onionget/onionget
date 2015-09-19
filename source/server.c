@@ -8,6 +8,7 @@
 #include <unistd.h>
 
 #include "datacontainer.h"
+#include "activeconnection.h" 
 #include "router.h"
 #include "dlinkedlist.h"
 #include "memorymanager.h"
@@ -18,7 +19,7 @@
 static void *processConnection(void *activeConnectionV);
 int prepareSharedFiles(server *this);
 static int serverListen(server *this);
-static activeConnection *getConnectionObject(server *this);
+
 
 static int sendFileNotFound(activeConnection *connection);
 static int sendNextRequestedFile(activeConnection *connection);
@@ -116,7 +117,7 @@ static int serverListen(server *this)
   
   while(1){  
     //create a connection object 
-    connection = getConnectionObject(this);
+    connection = newActiveConnection(this);
     if(connection == NULL){
       printf("Error: server failed to new a connection object (probably because this was NULL)\n");
       return 0;
@@ -151,39 +152,6 @@ static int serverListen(server *this)
 
 /****************** PRIVATE METHODS *******************/
 
-/*
- * Keeps trying to allocate an activeConnection object, if fails due to out of memory, sleeps one second and tries again forever
- */
-static activeConnection *getConnectionObject(server *this)
-{
-  activeConnection *connection;
-  
-  if(this == NULL){
-    printf("Error: Something was NULL that shouldn't have beena\n");
-    return NULL; 
-  }
-  
-  do{
-    connection = (activeConnection *)secureAllocate(sizeof(*connection));
-    if(connection == NULL){
-      sleep(1);
-      continue; 
-    }
- 
-    connection->connectedRouter = newRouter(); 
-    if(connection->connectedRouter == NULL){
-      secureFree(&connection, sizeof(*connection)); 
-      sleep(1);
-      continue;
-    }
-    
-    connection->server = this;
-    break; 
-  }while(1);
-    
-  return connection; 
-}
-
 
 static void *processConnection(void *connectionV)
 {
@@ -208,20 +176,19 @@ static void *processConnection(void *connectionV)
   }
   
   //send all the requested files
-  for(filenameBytesize = 0; totalBytesize > 0; totalBytesize -= filenameBytesize + sizeof(uint32_t)){
+  for(filenameBytesize = 0; totalBytesize > 0; totalBytesize -= filenameBytesize + sizeof(uint32_t)){ 
     filenameBytesize = sendNextRequestedFile(connection);
     
     if(filenameBytesize == -1){
       printf("Error: Failed to send file to client\n");
-      goto cleanup;
+      goto cleanup;  
     }
   }
     
 
   cleanup:  
-   if( !connection->connectedRouter->destroyRouter(&connection->connectedRouter) )      printf("Error: Failed to destroy router object\n"); 
-   if( !secureFree(&connection, sizeof(*connection)) )                                  printf("Error: Failed to free connection object\n"); //todo make a destroy function for activeConnection maybe even split it off into its own file
-   return NULL;  
+    if(connection != NULL && !connection->destroyActiveConnection(&connection)) printf("Error: Failed to destroy active connection object\n"); 
+    return NULL;  
 }
   
 //returns pointer to NULL on error   
