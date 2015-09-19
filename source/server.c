@@ -191,14 +191,14 @@ static void *processConnection(void *connectionV)
   dataContainer    *currentFileId;
   dataContainer    *outgoingFile; 
   
-  //basic sanity check
-  if(connectionV == NULL){
+  //give the connectionV the correct cast
+  connection = (activeConnection*)connectionV;
+  
+  //basic sanity checking
+  if( connection == NULL || connection->connectedRouter == NULL || connection->server == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
     return NULL; 
   }
-  
-  //give the connectionV the correct cast
-  connection = (activeConnection*)connectionV;
   
   //get the total incoming bytesize, perform basic sanity check
   totalBytesize = connection->connectedRouter->getIncomingBytesize(connection->connectedRouter); 
