@@ -23,8 +23,14 @@ static int serverListen(server *this);
 //0         1               2               3                    4
 //[exe] [server address] [server port] [shared folder path] [memory cache megabyte size] 
 
-
-server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uint32_t maxMemoryCacheMegabytes)
+/*
+ * newServer initializes a new server object, passed a NULL terminated string sharedFolderPath which is full path to the servers shared folder
+ * null terminated string bindAddress is ipv4 address to bind to, int listen port is port on bindAddress to listen on
+ * 
+ * maxMemoryCacheMegabytes is maximum amount of RAM to use for file cache, in megabytes, this is converted to bytes and stored in a uint32_t internally
+ * and therefore to prevent unsigned integer wrapping 
+ */
+server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uint16_t maxMemoryCacheMegabytes)
 {
   server *this; 
     
@@ -39,7 +45,7 @@ server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uin
     return NULL; 
   }
   
-  //simple buffer overflow protection 
+  //simple unsigned integer wrap protection
   if(maxMemoryCacheMegabytes > TWO_POW_THIRTY_TWO / BYTES_IN_A_MEGABYTE){
     printf("Error: maximum cache megabyte size supported is %lu, as cache is internally stored in bytes in a uint32_t\n", TWO_POW_THIRTY_TWO / BYTES_IN_A_MEGABYTE); 
     return NULL; 

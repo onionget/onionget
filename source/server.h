@@ -23,4 +23,4 @@ typedef struct activeConnection{
 
 
 
-server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uint32_t maxMemoryCacheMegabytes);
+server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uint16_t maxMemoryCacheMegabytes);
