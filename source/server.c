@@ -18,10 +18,11 @@
 static void *processConnection(void *activeConnectionV);
 int prepareSharedFiles(server *this);
 static int serverListen(server *this);
+static activeConnection *getConnectionObject(server *this);
 
 
 //0         1               2               3                    4
-//[exe] [server address] [server port] [shared folder path] [memory cache megabyte size] 
+//[exe] [server address] [server port] [shared folder path] [memory cache megabyte size (max 4294)] 
 
 /*
  * newServer initializes a new server object, passed a NULL terminated string sharedFolderPath which is full path to the servers shared folder
@@ -38,7 +39,7 @@ server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uin
   server *this; 
     
   if(sharedFolderPath == NULL || bindAddress == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    printf("Error: Something was NULL that shouldn't have beenaaaaaa\n");
     return NULL;
   }
   
@@ -106,12 +107,61 @@ static int serverListen(server *this)
   activeConnection *connection;
   
   if(this == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    printf("Error: Something was NULL that shouldn't have beenaaaaaa\n");
     return 0;
   }
   
   while(1){  
-    connection = (activeConnection*)secureAllocate(sizeof(*connection));
+    //create a connection object 
+    connection = getConnectionObject(this);
+    if(connection == NULL){
+      printf("Error: server failed to new a connection object (probably because this was NULL)\n");
+      return 0;
+    }
+    
+    //block until a connecting client uses the connection object 
+    if( !connection->connectedRouter->setSocket( connection->connectedRouter, this->listeningRouter->getConnection(this->listeningRouter) ) ){
+      printf("Error: Failed to set active connection router socket\n");
+      return 0;
+    }
+    
+    if( pthread_create(&processingThread, NULL, processConnection, (void*)connection) != 0 ){     
+      if( !connection->connectedRouter->destroyRouter(&connection->connectedRouter) ){
+	printf("Error: Failed to destroy router object\n");
+	return 0;	
+      }
+     
+      if( !secureFree(&connection, sizeof(*connection)) ){
+        printf("Error: Failed to free activeConnection object\n");
+        return 0;
+      }
+    }
+  }
+  
+}
+
+
+
+
+
+
+
+/****************** PRIVATE METHODS *******************/
+
+/*
+ * Keeps trying to allocate an activeConnection object, if fails due to out of memory, sleeps one second and tries again forever
+ */
+static activeConnection *getConnectionObject(server *this)
+{
+  activeConnection *connection;
+  
+  if(this == NULL){
+    printf("Error: Something was NULL that shouldn't have beena\n");
+    return NULL; 
+  }
+  
+  do{
+    connection = (activeConnection *)secureAllocate(sizeof(*connection));
     if(connection == NULL){
       sleep(1);
       continue; 
@@ -125,35 +175,11 @@ static int serverListen(server *this)
     }
     
     connection->server = this;
+    break; 
+  }while(1);
     
-    if( !connection->connectedRouter->setSocket( connection->connectedRouter, this->listeningRouter->getConnection(this->listeningRouter) ) ){
-      printf("Error: Failed to set active connection router socket\n");
-      return 0;
-    }
-  
-    
-    if( pthread_create(&processingThread, NULL, processConnection, (void*)connection) ){
-      
-      if( !connection->connectedRouter->destroyRouter(&connection->connectedRouter) ){
-	printf("Error: Failed to destroy router object\n");
-	return 0;
-      }
-     
-      if( !secureFree(&connection, sizeof(*connection)) ){
-	printf("Error: Failed to free activeConnection object\n");
-	return 0;
-      }
-   
-      continue;
-    }
-  }
+  return connection; 
 }
-
-
-
-
-
-/****************** PRIVATE METHODS *******************/
 
 
 static void *processConnection(void *connectionV)
@@ -164,15 +190,16 @@ static void *processConnection(void *connectionV)
   uint32_t         incomingBytesize;
   server           *server;
   router           *connectedRouter; 
-  size_t           currentSectionBytesize;
+  uint32_t         currentSectionBytesize;
   char             *currentSection;
+  char             *placeHolder; 
 
   if(connectionV == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    printf("Error: Something was NULL that shouldn't have beenaa\n");
     return NULL; 
   }
   
-  currentSection = NULL; 
+  currentSection   = NULL; 
   
   connection       = (activeConnection*)connectionV; 
   server           = connection->server;
@@ -194,12 +221,14 @@ static void *processConnection(void *connectionV)
     return NULL; 
   }
   
+  placeHolder = secureAllocate(incomingBytesize); 
   
   //NOTE: Enforce NULL termination of request string, this is vital for security 
   memset( &(fileRequestString->data[fileRequestString->bytesize - 1]), '\0', 1); 
 
   
-  for( currentSection = strtok( (char*)(fileRequestString->data), "/") ; currentSection != NULL ; currentSection = strtok(NULL, "/") ){
+  
+  for( currentSection = strtok_r( (char*)(fileRequestString->data), "/", &placeHolder) ; currentSection != NULL ; currentSection = strtok_r(NULL, "/", &placeHolder) ){
  
     currentSectionBytesize = strlen(currentSection);
     
@@ -234,6 +263,7 @@ static void *processConnection(void *connectionV)
     }
   }
   
+  
   if( !secureFree(&connection, sizeof(*connection)) ){
     printf("Error: Failed to free activeConnection object\n");
     return NULL; 
@@ -258,7 +288,7 @@ int prepareSharedFiles(server *this)
   long          currentFileBytesize; 
   
   if(this == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    printf("Error: Something was NULL that shouldn't have beeaaan\n");
     return 0;
   }
    
