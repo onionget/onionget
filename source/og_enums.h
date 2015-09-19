@@ -57,4 +57,3 @@ enum{ RECEIVE_WAIT_TIMEOUT_USECS   = 0  };
 enum{  TERMINATING_NULL_HOP        = 1         };
 enum{  MAX_REQUEST_STRING_BYTESIZE = 1000000   };
 enum{  BYTES_IN_A_MEGABYTE         = 1000000   }; 
-enum{  TWO_POW_THIRTY_TWO          = 4294967296}; 

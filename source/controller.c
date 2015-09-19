@@ -189,6 +189,6 @@ static int showHelpExit()
   printf("\n ------ SYNTAX ------ \n\n");
   printf("Client Syntax: [./onionGet] [\"client\"] [tor bind address] [tor listen port] [onion address] [onion port] [operation] [save path]\n\n");
   printf("Client Operations: [\"--get\"] [filenames] ----- gets the files named from the server\n\n");
-  printf("Server Syntax: [./onionGet] [\"server\"] [bind address] [listen port] [shared folder path] [memory cache megabytes]\n\n");
+  printf("Server Syntax: [./onionGet] [\"server\"] [bind address] [listen port] [shared folder path] [memory cache megabytes (max 4294)]\n\n");
   exit(1); 
 }
