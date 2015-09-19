@@ -21,6 +21,7 @@ static int serverListen(server *this);
 static activeConnection *getConnectionObject(server *this);
 
 static int sendFileNotFound(activeConnection *connection);
+static int sendFile(activeConnection *connection, dataContainer *currentFileId);
 
 //0         1               2               3                    4
 //[exe] [server address] [server port] [shared folder path] [memory cache megabyte size (max 4294)] 
@@ -189,7 +190,6 @@ static void *processConnection(void *connectionV)
   uint32_t         totalBytesize;
   uint32_t         sectionBytesize; 
   dataContainer    *currentFileId;
-  dataContainer    *outgoingFile; 
   
   //give the connectionV the correct cast
   connection = (activeConnection*)connectionV;
@@ -214,17 +214,10 @@ static void *processConnection(void *connectionV)
     currentFileId = connection->connectedRouter->receive(connection->connectedRouter, sectionBytesize); 
     if(currentFileId == NULL) goto cleanup; 
     
-    outgoingFile = connection->server->cachedSharedFiles->getId(connection->server->cachedSharedFiles, currentFileId->data, currentFileId->bytesize);
-    if(!outgoingFile && !sendFileNotFound(connection)) goto cleanup; 
-    else if(!outgoingFile){
-      currentFileId->destroyDataContainer(&currentFileId); //never NULL if made it here
-      continue; 
-    }
+    if(!sendFile(connection, currentFileId)) goto cleanup;
     
+   
     currentFileId->destroyDataContainer(&currentFileId);
-    
-    if( !connection->connectedRouter->transmitBytesize(connection->connectedRouter, outgoingFile->bytesize) )             goto cleanup;
-    if( !connection->connectedRouter->transmit(connection->connectedRouter, outgoingFile->data, outgoingFile->bytesize) ) goto cleanup; 
   }
     
 
@@ -237,17 +230,37 @@ static void *processConnection(void *connectionV)
   
   
 
+static int sendFile(activeConnection *connection, dataContainer *currentFileId)
+{
+  dataContainer *outgoingFile; 
+  
+  if(connection == NULL || currentFileId == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
+    return 0; 
+  }
+  
+  //NOTE that we don't want to destroy this because it is a pointer to the file on the cache linked list (or NULL if it isn't on it)
+  outgoingFile = connection->server->cachedSharedFiles->getId(connection->server->cachedSharedFiles, currentFileId->data, currentFileId->bytesize);
+  
+  if(!outgoingFile && !sendFileNotFound(connection)){
+    printf("Error: Failed to send file not found to client\n");
+    return 0; 
+  }
+  
+  if( !connection->connectedRouter->transmitBytesize(connection->connectedRouter, outgoingFile->bytesize) ){
+    printf("Error: Failed to transmit file bytesize to client\n");
+    return 0; 
+  }
+  
+  if( !connection->connectedRouter->transmit(connection->connectedRouter, outgoingFile->data, outgoingFile->bytesize) ){
+    printf("Error: Failed to transmit file to client\n");
+    return 0; 
+  }
+  
+  return 1; 
+}
   
   
-  
-   
-
-  
-
-
-
-
-
 static int sendFileNotFound(activeConnection *connection)
 {
   if( !connection->connectedRouter->transmitBytesize( connection->connectedRouter, strlen("not found") ) ){ 
