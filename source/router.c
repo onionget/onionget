@@ -116,8 +116,8 @@ static int destroyRouter(router **thisPointer)
 static dataContainer *receive(router *this, uint32_t payloadBytesize)
 {
   dataContainer   *receivedMessage;
-  uint32_t        bytesReceived;
-  uint32_t        recvReturn;
+  size_t          bytesReceived;
+  size_t          recvReturn;
   
   //basic sanity checks
   if(this == NULL){
@@ -165,7 +165,7 @@ static uint32_t getIncomingBytesize(router *this)
   }
   
   //receive the number of incoming bytes, which is encoded as a uint32_t
-  incomingBytesizeContainer = this->receive(this, sizeof(incomingBytesize));
+  incomingBytesizeContainer = this->receive(this, sizeof(uint32_t));
   if(incomingBytesizeContainer == NULL){
     printf("Error: Failed to get incoming bytesize\n");
     return -1;  
@@ -189,8 +189,8 @@ static uint32_t getIncomingBytesize(router *this)
  */
 static int transmit(router *this, void *payload, uint32_t payloadBytesize)
 {
-  uint32_t sentBytes;  
-  uint32_t sendReturn;
+  size_t sentBytes;  
+  size_t sendReturn;
   
   //basic sanity checking
   if(this == NULL || payload == NULL){

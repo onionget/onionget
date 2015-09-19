@@ -7,7 +7,7 @@ typedef struct server{
   int      sharedFolderPathBytesize;
   char     *bindAddress;
   int      listenPort;
-  uint64_t maxMemoryCacheBytesize; 
+  size_t   maxMemoryCacheBytesize; 
   dll      *cachedSharedFiles;  
   router  *listeningRouter; 
   
@@ -23,4 +23,4 @@ typedef struct activeConnection{
 
 
 
-server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uint64_t maxMemoryCacheMegabytes);
+server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, size_t maxMemoryCacheMegabytes);

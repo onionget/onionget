@@ -19,7 +19,7 @@ static int destroyDataContainer(dataContainer **thisPointer);
  * the data pointer is of type unsigned char*, pointing to up to 2^64 bytes 
  *
  */
-dataContainer* newDataContainer(uint64_t bytesize)
+dataContainer* newDataContainer(size_t bytesize)
 {
   dataContainer *this;
   

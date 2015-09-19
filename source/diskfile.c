@@ -15,7 +15,7 @@
 static int             diskFileWrite(diskFile *this, dataContainer *dataContainer);
 static dataContainer   *diskFileRead(diskFile *this);
 static int             closeTearDown(diskFile **thisPointer);
-static long int        getBytesize(diskFile *this);
+static long            getBytesize(diskFile *this);
 
 
 //PRIVATE METHODS
@@ -84,9 +84,9 @@ diskFile *newDiskFile(char *path, char *name, char *mode)
 /*
  * getBytesize returns -1 on error, and the bytesize of the initialized diskFile on success
  */
-static long int getBytesize(diskFile *this)
+static long getBytesize(diskFile *this)
 {
-  long int  fileBytesize; 
+  long fileBytesize; 
   
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been");
@@ -220,7 +220,7 @@ static dataContainer *diskFileRead(diskFile *this)
   }
 
   
-  //TODO look into error checking more TODO and maybe don't read in a single operation? 
+  //TODO look into error checking more TODO don't read in a single operation
   if( fread(dataContainer->data, fileBytesize, COUNT, this->descriptor) != COUNT){
     printf("Error: Failed to read file into data container\n");
     secureFree( &dataContainer->data, dataContainer->bytesize );
@@ -244,8 +244,8 @@ static dataContainer *diskFileRead(diskFile *this)
  */
 int initializePathProperties(diskFile *this, char *path, char *name)
 {
-  uint32_t  pathBytesize;
-  uint32_t  nameBytesize;
+  size_t  pathBytesize;
+  size_t  nameBytesize;
   
   if(this == NULL || path == NULL || name == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");

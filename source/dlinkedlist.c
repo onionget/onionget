@@ -9,14 +9,14 @@
 
 
 //public methods
-static int insert(dll  *this, int end, char *id, uint64_t idBytesize, dataContainer *dataContainer);
-static dataContainer   *getId(dll *this, char *id, uint64_t idBytesize);
+static int insert(dll  *this, int end, char *id, size_t idBytesize, dataContainer *dataContainer);
+static dataContainer   *getId(dll *this, char *id, size_t idBytesize);
 
 //private methods
 static int       insertInitial(dll *this, dllObject *object);
 static int       insertHead(dll *this, dllObject *object);
 static int       insertTail(dll *this, dllObject *object);
-static dllObject *newDllObject(dataContainer *dataContainer, char *id, uint64_t idBytesize);
+static dllObject *newDllObject(dataContainer *dataContainer, char *id, size_t idBytesize);
 
 /************ OBJECT CONSTRUCTOR ******************/
 
@@ -49,7 +49,7 @@ dll* newDll(void)
 /*
  *  getId returns NULL if an error occurs or the item identified by id is not found in the list. On success it returns a pointer to to requested dataContainer.
  */
-static dataContainer *getId(dll *this, char *id, uint64_t idBytesize)
+static dataContainer *getId(dll *this, char *id, size_t idBytesize)
 {
   dllObject *currentObject;
   
@@ -72,7 +72,7 @@ static dataContainer *getId(dll *this, char *id, uint64_t idBytesize)
  * identified by id id, which is idBytesize bytes. Items may be inserted at end DLL_HEAD or DLL_TAIL, for the
  * start or end of the list, respectively. 
  */
-static int insert(dll *this, int end, char *id, uint64_t idBytesize, dataContainer *dataContainer)
+static int insert(dll *this, int end, char *id, size_t idBytesize, dataContainer *dataContainer)
 {
   dllObject  *object;
   int        insertSuccess;
@@ -122,7 +122,7 @@ static int insert(dll *this, int end, char *id, uint64_t idBytesize, dataContain
 /*
  * newDllObject returns NULL on error, or a pointer to a new dllObject on success. 
  */
-static dllObject *newDllObject(dataContainer *dataContainer, char *id, uint64_t idBytesize)
+static dllObject *newDllObject(dataContainer *dataContainer, char *id, size_t idBytesize)
 { 
   dllObject  *object;
   

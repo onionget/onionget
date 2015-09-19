@@ -8,17 +8,17 @@ typedef struct dllObject
   struct dllObject *previous;
   struct dllObject *next;
   char             *identifier; 
-  uint64_t         identifierBytesize; 
+  size_t           identifierBytesize; 
   dataContainer    *dataContainer;
 }dllObject;
 
 typedef struct dll{
   struct dllObject *head;
   struct dllObject *tail;
-  uint64_t         bytesize;
+  size_t           bytesize;
   
-  dataContainer *(*getId)(struct dll* this, char* id, uint64_t idBytesize); 
-  int          (*insert)(struct dll* this, int end, char* id, uint64_t idBytesize, dataContainer* dataContainer);  
+  dataContainer *(*getId)(struct dll* this, char* id, size_t idBytesize); 
+  int          (*insert)(struct dll* this, int end, char* id, size_t idBytesize, dataContainer* dataContainer);  
 }dll;
 
 

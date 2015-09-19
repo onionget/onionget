@@ -24,7 +24,7 @@ static int serverListen(server *this);
 //[exe] [server address] [server port] [shared folder path] [memory cache megabyte size] 
 
 
-server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uint64_t maxMemoryCacheMegabytes)
+server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, size_t maxMemoryCacheMegabytes)
 {
   server *this; 
     
@@ -145,7 +145,7 @@ static void *processConnection(void *connectionV)
   uint32_t         incomingBytesize;
   server           *server;
   router           *connectedRouter; 
-  uint32_t         currentSectionBytesize;
+  size_t           currentSectionBytesize;
   char             *currentSection;
 
   if(connectionV == NULL){
@@ -232,11 +232,11 @@ static void *processConnection(void *connectionV)
 //returns 0 on error
 int prepareSharedFiles(server *this)
 {
-  uint64_t      currentlyCachedBytes;
+  size_t        currentlyCachedBytes;
   DIR           *directory; 
   struct dirent *fileEntry; 
   diskFile      *diskFile; 
-  long int      currentFileBytesize; 
+  long          currentFileBytesize; 
   
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");

@@ -4,12 +4,12 @@
 #include <stdint.h>
 #include "memorymanager.h"
 
-static int memoryClear(volatile unsigned char *memoryPointer, uint64_t bytesize);
+static int memoryClear(volatile unsigned char *memoryPointer, size_t bytesize);
 
 /*
  * secureAllocate returns NULL on error, otherwise returns a pointer to the allocated memory buffer, which is bytesize bytes and initialized to NULL. 
  */
-void *secureAllocate(uint64_t bytesize)
+void *secureAllocate(size_t bytesize)
 {
   void *memory;
   
@@ -36,7 +36,7 @@ void *secureAllocate(uint64_t bytesize)
  * implemented because the memset solution in MEM03-C causes compiler warnings, this should do the same thing without
  * compiler warning 
  */
-static int memoryClear(volatile unsigned char *memoryPointer, uint64_t bytesize)
+static int memoryClear(volatile unsigned char *memoryPointer, size_t bytesize)
 {
   if(memoryPointer == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -60,13 +60,13 @@ static int memoryClear(volatile unsigned char *memoryPointer, uint64_t bytesize)
  * 
  * Superficial testing confirms memory is freed, pointer is set to NULL, and memory is cleared, though more in depth testing of memory cleared is required
  * TODO: preferably the memory clearing function will be replaced with explicit_bzero, memset_s, memzero_explicit, or similar, or at least the custom 
- * implementation will be verified as not optimized out, however using a volatile pointer in compliance with MEM03-C, and also using a memory barried as 
+ * implementation will be verified as not optimized out, however using a volatile pointer in compliance with MEM03-C, and also using a memory barrier as 
  * suggested by various security experts. 
  * 
  * TODO: Make sure volatile pointer usage is in compliance with EXP32-C 
  * 
  */
-int secureFree(void *memory, uint64_t bytesize)
+int secureFree(void *memory, size_t bytesize)
 {
   void                   **memoryCorrectCast; 
   volatile unsigned char *dataBuffer;
