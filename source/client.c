@@ -17,8 +17,8 @@ static int        getFiles(client *this);
 
 //PRIVATE METHODS
 static int        establishConnection(client *this);
-static uint32_t   calculateFileRequestStringBytesize(client *this);
-static int        sendRequestString(client *this);
+static uint32_t   calculateTotalRequestBytesize(client *this);
+static int        sendRequestedFilenames(client *this);
 static int        getIncomingFile(client *this, diskFile *diskFile);
 
 
@@ -118,7 +118,7 @@ static int getFiles(client *this)
   }
   
   //send the server the request string
-  if( !sendRequestString(this) ){
+  if( !sendRequestedFilenames(this) ){
     printf("Error: Failed to send server request string\n");
     return 0;
   }
@@ -213,13 +213,13 @@ static int getIncomingFile(client *this, diskFile *diskFile)
 
 
 /*
- * sendRequestString returns 0 on error and 1 on success, it sends the already initialized file request string to the server
+ * sendRequestedFilenames returns 0 on error and 1 on success, it sends the already initialized file request string to the server
  */
 
 
 //[request string bytesize][first filename bytesize][first file name][second filename bytesize][second file name]
 
-static int sendRequestString(client *this)
+static int sendRequestedFilenames(client *this)
 {
   uint32_t fileRequestStringBytesize;
   uint32_t currentFile;
@@ -229,7 +229,7 @@ static int sendRequestString(client *this)
     return 0;
   }
   
-  fileRequestStringBytesize = calculateFileRequestStringBytesize(this);
+  fileRequestStringBytesize = calculateTotalRequestBytesize(this);
   if(fileRequestStringBytesize == -1){
     printf("Error: failed to calculate file request string bytesize\n");
     return 0; 
@@ -260,9 +260,9 @@ static int sendRequestString(client *this)
 
 
 /*
- * calculateFileRequestStringBytesize returns -1 on error and the bytesize of the file request string on success
+ * calculateTotalRequestBytesize returns -1 on error and the bytesize of the file request string on success
  */
-static uint32_t calculateFileRequestStringBytesize(client *this)
+static uint32_t calculateTotalRequestBytesize(client *this)
 {
   uint32_t fileRequestStringBytesize; 
   uint32_t currentFile;
