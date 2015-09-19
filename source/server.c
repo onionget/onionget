@@ -251,7 +251,7 @@ static void *processConnection(void *connectionV)
 //returns 0 on error
 int prepareSharedFiles(server *this)
 {
-  size_t        currentlyCachedBytes;
+  uint32_t      currentlyCachedBytes;
   DIR           *directory; 
   struct dirent *fileEntry; 
   diskFile      *diskFile; 
