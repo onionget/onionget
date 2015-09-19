@@ -28,7 +28,8 @@ static int serverListen(server *this);
  * null terminated string bindAddress is ipv4 address to bind to, int listen port is port on bindAddress to listen on
  * 
  * maxMemoryCacheMegabytes is maximum amount of RAM to use for file cache, in megabytes, this is converted to bytes and stored in a uint32_t internally
- * and therefore to prevent unsigned integer wrapping it may not be larger than TWO_POW_THIRTY_TWO / BYTES_IN_A_MEGABYTE
+ * and therefore to prevent unsigned integer wrapping it may not be larger than TWO_POW_THIRTY_TWO / BYTES_IN_A_MEGABYTE. TODO maybe sometime in the future
+ * store bytesize of cache as uint64_t, but for now this is a clean and adequate solution, it just limits the cache size to a little over four gigabytes
  * 
  * returns pointer to server object on success, pointer to NULL on error
  */
