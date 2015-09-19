@@ -24,7 +24,7 @@ static int serverListen(server *this);
 //[exe] [server address] [server port] [shared folder path] [memory cache megabyte size] 
 
 
-server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, size_t maxMemoryCacheMegabytes)
+server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uint32_t maxMemoryCacheMegabytes)
 {
   server *this; 
     
@@ -39,11 +39,20 @@ server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, siz
     return NULL; 
   }
   
+  //simple buffer overflow protection 
+  if(maxMemoryCacheMegabytes > TWO_POW_THIRTY_TWO / BYTES_IN_A_MEGABYTE){
+    printf("Error: maximum cache megabyte size supported is %lu, as cache is internally stored in bytes in a uint32_t\n", TWO_POW_THIRTY_TWO / BYTES_IN_A_MEGABYTE); 
+    return NULL; 
+  }
+  else{
+    this->maxMemoryCacheBytesize = maxMemoryCacheMegabytes * BYTES_IN_A_MEGABYTE;
+  }
+   
   this->sharedFolderPath         = sharedFolderPath;
   this->sharedFolderPathBytesize = strlen(this->sharedFolderPath); 
   this->bindAddress              = bindAddress;
   this->listenPort               = listenPort;
-  this->maxMemoryCacheBytesize   = maxMemoryCacheMegabytes * BYTES_IN_A_MEGABYTE; 
+  
   
   this->cachedSharedFiles = newDll();
   if(this->cachedSharedFiles == NULL){
