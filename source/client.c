@@ -48,7 +48,12 @@ client *newClient(char *torBindAddress, char *torPort, char *onionAddress, char 
   }
  
   //initialize the client properties
-  this->router           = newRouter();
+  this->router = newRouter();
+  if(this->router == NULL){
+    printf("Error: Failed to create router for client, client instantiation failed\n");
+    return NULL; 
+  }
+  
   this->torBindAddress   = torBindAddress;
   this->torPort          = torPort;
   this->onionAddress     = onionAddress;
