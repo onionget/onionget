@@ -21,7 +21,8 @@ static int serverListen(server *this);
 static activeConnection *getConnectionObject(server *this);
 
 static int sendFileNotFound(activeConnection *connection);
-static int sendFile(activeConnection *connection, dataContainer *currentFileId);
+static int sendNextRequestedFile(activeConnection *connection);
+static dataContainer *getRequestedFilename(activeConnection *connection);
 
 //0         1               2               3                    4
 //[exe] [server address] [server port] [shared folder path] [memory cache megabyte size (max 4294)] 
@@ -188,8 +189,7 @@ static void *processConnection(void *connectionV)
 {
   activeConnection *connection;
   uint32_t         totalBytesize;
-  uint32_t         sectionBytesize; 
-  dataContainer    *currentFileId;
+  uint32_t         filenameBytesize; 
   
   //give the connectionV the correct cast
   connection = (activeConnection*)connectionV;
@@ -204,60 +204,79 @@ static void *processConnection(void *connectionV)
   totalBytesize = connection->connectedRouter->getIncomingBytesize(connection->connectedRouter); 
   if(totalBytesize > MAX_REQUEST_STRING_BYTESIZE || totalBytesize == 0) goto cleanup; 
   
-  //go through all of the incoming bytes and process accordingly
-  for(sectionBytesize = 0 ; totalBytesize > 0; totalBytesize -= sectionBytesize + sizeof(uint32_t)){
+  //send all the requested files
+  while(totalBytesize > 0){
+    filenameBytesize = sendNextRequestedFile(connection);
     
-    //get the bytesize of the incoming requested file name and perform basic sanity checks
-    sectionBytesize = connection->connectedRouter->getIncomingBytesize(connection->connectedRouter); 
-    if(sectionBytesize > MAX_SECTION_BYTESIZE || sectionBytesize == 0) goto cleanup; 
-        
-    currentFileId = connection->connectedRouter->receive(connection->connectedRouter, sectionBytesize); 
-    if(currentFileId == NULL) goto cleanup; 
+    if(filenameBytesize == -1) goto cleanup;
     
-    if(!sendFile(connection, currentFileId)) goto cleanup;
-    
-   
-    currentFileId->destroyDataContainer(&currentFileId);
+    totalBytesize -= filenameBytesize + sizeof(uint32_t); 
   }
     
 
   cleanup:  
-   if( currentFileId != NULL && !currentFileId->destroyDataContainer(&currentFileId))   printf("Error: Failed to destroy current file ID after done with it\n");
    if( !connection->connectedRouter->destroyRouter(&connection->connectedRouter) )      printf("Error: Failed to destroy router object\n"); 
    if( !secureFree(&connection, sizeof(*connection)) )                                  printf("Error: Failed to free connection object\n"); //todo make a destroy function for activeConnection maybe even split it off into its own file
    return NULL;  
 }
   
-  
-
-static int sendFile(activeConnection *connection, dataContainer *currentFileId)
+//returns pointer to NULL on error   
+static dataContainer *getRequestedFilename(activeConnection *connection)
 {
-  dataContainer *outgoingFile; 
+  uint32_t fileIdBytesize;
   
-  if(connection == NULL || currentFileId == NULL){
+  fileIdBytesize = connection->connectedRouter->getIncomingBytesize(connection->connectedRouter); 
+  if(fileIdBytesize > MAX_FILE_ID_BYTESIZE || fileIdBytesize == 0){
+   return NULL;  
+  }
+        
+  return connection->connectedRouter->receive(connection->connectedRouter, fileIdBytesize);  
+}
+  
+//returns bytesize of sent filename (or -1 on error); 
+static int sendNextRequestedFile(activeConnection *connection)
+{
+  dataContainer *currentFilename = NULL; 
+  dataContainer *outgoingFile    = NULL; 
+  uint32_t      filenameBytesize = 0;
+  
+  if(connection == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
-    return 0; 
+    goto error; 
+  }
+  
+  currentFilename = getRequestedFilename(connection); 
+  if(currentFilename == NULL){
+   printf("Error: Failed to get file ID from client\n");
+   goto error; 
   }
   
   //NOTE that we don't want to destroy this because it is a pointer to the file on the cache linked list (or NULL if it isn't on it)
-  outgoingFile = connection->server->cachedSharedFiles->getId(connection->server->cachedSharedFiles, currentFileId->data, currentFileId->bytesize);
+  outgoingFile = connection->server->cachedSharedFiles->getId(connection->server->cachedSharedFiles, currentFilename->data, currentFilename->bytesize);
   
   if(!outgoingFile && !sendFileNotFound(connection)){
     printf("Error: Failed to send file not found to client\n");
-    return 0; 
+    goto error; 
   }
   
   if( !connection->connectedRouter->transmitBytesize(connection->connectedRouter, outgoingFile->bytesize) ){
     printf("Error: Failed to transmit file bytesize to client\n");
-    return 0; 
+    goto error;
   }
   
   if( !connection->connectedRouter->transmit(connection->connectedRouter, outgoingFile->data, outgoingFile->bytesize) ){
     printf("Error: Failed to transmit file to client\n");
-    return 0; 
+    goto error; 
   }
   
-  return 1; 
+
+  filenameBytesize = currentFilename->bytesize; 
+  currentFilename->destroyDataContainer(&currentFilename);
+  return filenameBytesize; 
+  
+  error:
+   if(currentFilename != NULL) currentFilename->destroyDataContainer(&currentFilename);
+   return -1; 
 }
   
   
