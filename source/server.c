@@ -28,7 +28,9 @@ static int serverListen(server *this);
  * null terminated string bindAddress is ipv4 address to bind to, int listen port is port on bindAddress to listen on
  * 
  * maxMemoryCacheMegabytes is maximum amount of RAM to use for file cache, in megabytes, this is converted to bytes and stored in a uint32_t internally
- * and therefore to prevent unsigned integer wrapping 
+ * and therefore to prevent unsigned integer wrapping it may not be larger than TWO_POW_THIRTY_TWO / BYTES_IN_A_MEGABYTE
+ * 
+ * returns pointer to server object on success, pointer to NULL on error
  */
 server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uint16_t maxMemoryCacheMegabytes)
 {

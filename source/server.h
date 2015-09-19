@@ -9,7 +9,7 @@ typedef struct server{
   int      listenPort;
   uint32_t maxMemoryCacheBytesize; 
   dll      *cachedSharedFiles;  
-  router  *listeningRouter; 
+  router   *listeningRouter; 
   
   int (*serverListen)(struct server* this); 
 }server;

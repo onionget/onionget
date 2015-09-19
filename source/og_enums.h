@@ -1,5 +1,7 @@
 //controller
 
+#pragma once
+
 enum{ HIGHEST_VALID_PORT      = 65535}; 
 
 enum{ EXE_NAME                = 0 }; 
