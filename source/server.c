@@ -217,8 +217,11 @@ static void *processConnection(void *connectionV)
     outgoingFile = connection->server->cachedSharedFiles->getId(connection->server->cachedSharedFiles, currentFileId->data, currentFileId->bytesize);
     if(!outgoingFile && !sendFileNotFound(connection)) goto cleanup; 
     else if(!outgoingFile){
-      continue; //todo something clean up lolol
+      currentFileId->destroyDataContainer(&currentFileId); //never NULL if made it here
+      continue; 
     }
+    
+    currentFileId->destroyDataContainer(&currentFileId);
     
     if( !connection->connectedRouter->transmitBytesize(connection->connectedRouter, outgoingFile->bytesize) )             goto cleanup;
     if( !connection->connectedRouter->transmit(connection->connectedRouter, outgoingFile->data, outgoingFile->bytesize) ) goto cleanup; 
@@ -226,8 +229,9 @@ static void *processConnection(void *connectionV)
     
 
   cleanup:  
-   if( !connection->connectedRouter->destroyRouter(&connection->connectedRouter) ) printf("Error: Failed to destroy router object\n"); 
-   if( !secureFree(&connection, sizeof(*connection)) )                             printf("Error: Failed to free connection object\n");
+   if( currentFileId != NULL && !currentFileId->destroyDataContainer(&currentFileId))   printf("Error: Failed to destroy current file ID after done with it\n");
+   if( !connection->connectedRouter->destroyRouter(&connection->connectedRouter) )      printf("Error: Failed to destroy router object\n"); 
+   if( !secureFree(&connection, sizeof(*connection)) )                                  printf("Error: Failed to free connection object\n"); //todo make a destroy function for activeConnection maybe even split it off into its own file
    return NULL;  
 }
   
