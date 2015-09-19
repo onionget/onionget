@@ -197,20 +197,24 @@ static void *processConnection(void *connectionV)
   //basic sanity checking
   if( connection == NULL || connection->connectedRouter == NULL || connection->server == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
-    return NULL; 
+    goto cleanup; 
   }
   
   //get the total incoming bytesize, perform basic sanity check
   totalBytesize = connection->connectedRouter->getIncomingBytesize(connection->connectedRouter); 
-  if(totalBytesize > MAX_REQUEST_STRING_BYTESIZE || totalBytesize == 0) goto cleanup; 
+  if(totalBytesize > MAX_REQUEST_STRING_BYTESIZE || totalBytesize == 0){
+    printf("Error: Client wants to send more bytes than allowed, or error in getting total request bytesize\n");
+    goto cleanup; 
+  }
   
   //send all the requested files
-  while(totalBytesize > 0){
+  for(filenameBytesize = 0; totalBytesize > 0; totalBytesize -= filenameBytesize + sizeof(uint32_t)){
     filenameBytesize = sendNextRequestedFile(connection);
     
-    if(filenameBytesize == -1) goto cleanup;
-    
-    totalBytesize -= filenameBytesize + sizeof(uint32_t); 
+    if(filenameBytesize == -1){
+      printf("Error: Failed to send file to client\n");
+      goto cleanup;
+    }
   }
     
 
