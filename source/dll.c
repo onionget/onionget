@@ -9,7 +9,7 @@
 
 
 //public methods
-static int       insert(dllObject *this, int end, char *id, void *memberPointer);
+static int       insert(dllObject *this, int end, void *memberData);
 
 
 //private methods
@@ -39,7 +39,6 @@ dllObject* newDll(void)
   this->count = 0; 
   
   this->insert  = &insert;
-  this->getId   = &getId;
   
   return this;
 }
@@ -49,17 +48,16 @@ dllObject* newDll(void)
 
 
 /*
- * insert returns 0 on error and 1 on success. It inserts to the linked list dataContainer object dataContainer
- * identified by id id, which is idBytesize bytes. Items may be inserted at end DLL_HEAD or DLL_TAIL, for the
+ * insert returns 0 on error and 1 on success. Items may be inserted at end DLL_HEAD or DLL_TAIL, for the
  * start or end of the list, respectively. 
  */
-static int insert(dllObject *this, int end, char *id, void *memberPointer)
+static int insert(dllObject *this, int end, void *memberData)
 {
   dllMember  *member;
   int        insertSuccess;
   
   //first some sanity checking
-  if(this == NULL || id == NULL || dataContainer == NULL){
+  if(this == NULL || memberData == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0; 
   }
@@ -70,7 +68,7 @@ static int insert(dllObject *this, int end, char *id, void *memberPointer)
   }
   
   //sanity checks passed so allocate a new member
-  member = newDllMember(memberPointer);
+  member = newDllMember(memberData);
   if(member == NULL){
     printf("Error: Failed to create dll member\n");
     return 0;
@@ -102,9 +100,9 @@ static int insert(dllObject *this, int end, char *id, void *memberPointer)
 /*
  * newDllObject returns NULL on error, or a pointer to a new dllObject on success. 
  */
-static dllMember *newDllMember(void *memberPointer)
+static dllMember *newDllMember(void *memberData)
 { 
-  dllMember *Member;
+  dllMember *member;
   
   //allocate the dllObject 
   member = (dllMember *)secureAllocate(sizeof(*member));
@@ -113,7 +111,7 @@ static dllMember *newDllMember(void *memberPointer)
     return NULL;
   }
   
-  member->memberPointer = memberPointer; 
+  member->memberData    = memberData; 
   member->locked        = 0; 
   
   return member;

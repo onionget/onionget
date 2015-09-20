@@ -7,7 +7,7 @@ typedef struct dllMember
 {
   struct dllMember   *previous;
   struct dllMember   *next;
-  void               *memberPointer; 
+  void               *memberData; 
   uint8_t            locked; 
 }dllMember;
 
@@ -17,7 +17,7 @@ typedef struct dllObject{
   
   uint32_t count; 
   
-  int (*insert)(struct dllObject *this, int end, char *id, size_t idBytesize, dataContainerObject *dataContainer);  
+  int (*insert)(struct dllObject *this, int end, void *memberData);  
 }dllObject;
 
 
