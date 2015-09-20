@@ -31,13 +31,19 @@ enum{  ONION_ADDRESS_BYTESIZE = 22  };
 
 
 //client
-enum{  FILE_CHUNK_BYTESIZE    = 1000000 }; 
+
+//NOTE https://en.wikipedia.org/wiki/Page_%28computer_memory%29 
+//NOTE that for mmap to work (for writing files, and also reading) this must be a multiple of 
+//which is typically 4096, or 8192, this file chunk bytesize supports: 4kib, 8kib, 64kib, 256kib, 2mib page sizes
+//providing support for all standard page sizes, as well as many huge page sizes (only in PAE mode for 32bit x86). 
+//TODO add support for arbitrary page sizes
+enum{  FILE_CHUNK_BYTESIZE    = 2097152 }; 
 
 
 //diskfile
 
 enum{ COUNT = 1 };
-
+enum{ FILE_START = 0}; 
 
 
 //dlinkedlist

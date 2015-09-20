@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <sys/mman.h>
 
 #include "dataContainer.h"
 #include "diskFile.h"
@@ -12,8 +13,8 @@
 
 
 //PUBLIC METHODS
-static uint32_t              diskFileWrite(diskFileObject *this, dataContainerObject *dataContainer, uint32_t fpOffset); 
-static dataContainerObject   *diskFileRead(diskFileObject *this);
+static uint32_t              diskFileWrite(diskFileObject *this, dataContainerObject *dataContainer, uint32_t writeOffset); 
+static dataContainerObject   *diskFileRead(diskFileObject *this, uint32_t bytesToRead, uint32_t readOffset);
 static int                   closeTearDown(diskFileObject **thisPointer);
 static long                  getBytesize(diskFileObject *this);
 
@@ -156,10 +157,14 @@ static int closeTearDown(diskFileObject **thisPointer)
 }
 
 /*
- * diskFileWrite returns 1 on success 0 on error
+ * diskFileWrite returns 0 on error and bytes written on success
  */
-static int diskFileWrite(diskFileObject *this, dataContainerObject *dataContainer) 
+static uint32_t diskFileWrite(diskFileObject *this, dataContainerObject *dataContainer, uint32_t writeOffset) 
 {    
+  int     fid; 
+  void    *mappedMemory;
+  uint32_t bytesToWrite;
+  
   if(this == NULL || dataContainer == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
@@ -169,6 +174,8 @@ static int diskFileWrite(diskFileObject *this, dataContainerObject *dataContaine
     printf("Error: Cannot write 0 bytes to file\n");
     return 0; 
   }
+  
+  bytesToWrite = dataContainer->bytesize; 
   
   if( fileModeWritable(this->mode) != 1 ){
     printf("Error: File mode isn't writable (or it's NULL)\n"); 
@@ -180,24 +187,38 @@ static int diskFileWrite(diskFileObject *this, dataContainerObject *dataContaine
     return 0;
   }
   
-
-  if( fwrite( (const void*)dataContainer->data, dataContainer->bytesize, COUNT, this->descriptor) != COUNT ){
-    printf("Error: didn't write all data to file\n");
+  fid = fileno(this->descriptor);
+  if(fid == -1){
+    printf("Error: Failed to get integer file descriptor\n");
     return 0; 
   }
   
-  return 1;
+  //TODO check that readOffset is divisible by sysconf(_SC_PAGE_SIZE) (currently hard coded as sanity check in controller) (this will be irrelevant if we support arbitrary page sizes)
+  mappedMemory = mmap(NULL, bytesToWrite, PROT_WRITE, MAP_SHARED, fid , writeOffset);
+  if( mappedMemory == MAP_FAILED){
+    printf("Error: Failed to memory map file to write to\n");
+    return 0;
+  }
+  
+  memcpy(mappedMemory, dataContainer->data, bytesToWrite); 
+  
+  if( munmap(mappedMemory, bytesToWrite) ){
+    printf("Error: Failed to unmap file memory\n");
+    return 0;
+  }
+  
+  return bytesToWrite;
 }
 
 
 /*
  * diskFileRead returns NULL on error and a pointer to a dataContainer holding the data from the file associated with the diskFile object on success.
  */
-static dataContainerObject *diskFileRead(diskFileObject *this)
+static dataContainerObject *diskFileRead(diskFileObject *this, uint32_t bytesToRead, uint32_t readOffset)
 {
   dataContainerObject *dataContainer = NULL; 
-  long int            fileBytesize   = 0;
-  
+  void                *mappedMemory  = NULL;
+  int                 fid            = 0;
   
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -213,28 +234,35 @@ static dataContainerObject *diskFileRead(diskFileObject *this)
     printf("Error: File is not open\n");
     return NULL;
   }
-  
-  fileBytesize = this->getBytesize(this); 
-  if(fileBytesize == -1){
-    printf("Error: Failed to get file bytesize, cannot read it into data container\n");
-    return NULL; 
-  }
-  
-  dataContainer = newDataContainer(fileBytesize);
+    
+  dataContainer = newDataContainer(bytesToRead);
   if(dataContainer == NULL){
     printf("Error: Failed to create data container to read file into\n");
     return NULL; 
   }
 
-  
-  //TODO look into error checking more TODO don't read in a single operation
-  if( fread(dataContainer->data, fileBytesize, COUNT, this->descriptor) != COUNT){
-    printf("Error: Failed to read file into data container\n");
-    secureFree( &dataContainer->data, dataContainer->bytesize );
-    secureFree( &dataContainer, sizeof(*dataContainer)); 
-    return NULL; 
+  fid = fileno(this->descriptor);
+  if(fid == -1){
+    printf("Error: Failed to get integer file descriptor\n");
+    dataContainer->destroyDataContainer(&dataContainer); 
+    return 0; 
+  }
+
+  //TODO check that readOffset is divisible by sysconf(_SC_PAGE_SIZE) (currently hard coded as sanity check in controller) (this will be irrelevant if we support arbitrary page sizes)
+  mappedMemory = mmap(NULL, bytesToRead, PROT_READ, MAP_PRIVATE, fid , readOffset);
+  if( mappedMemory == MAP_FAILED){
+    printf("Error: Failed to memory map file to write to\n");
+    dataContainer->destroyDataContainer(&dataContainer); 
+    return 0;
   }
   
+  memcpy(dataContainer->data, mappedMemory, bytesToRead);
+  
+  if( munmap(mappedMemory, bytesToRead) ){
+    printf("Error: Failed to unmap memory read\n");
+    dataContainer->destroyDataContainer(&dataContainer); 
+    return 0; 
+  }
 
   return dataContainer; 
 }

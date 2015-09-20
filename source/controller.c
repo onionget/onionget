@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <unistd.h>
 
 #include "client.h"
 #include "server.h"
@@ -17,7 +18,7 @@ static int clientSanityCheck(char *onionPort, char *onionAddress, char *operatio
 static int showHelpExit(void);
 static int serverSanityCheck(int argc, char *bindAddress, char *listenPort);
 static int initializeServer(int argc, char *argv[]);
-
+static int systemSanityCheck(); 
 
 
 //TODO refactor this to take into account some functions never return, and clean up in general where showhelpexit is and how it works etc
@@ -25,6 +26,11 @@ static int initializeServer(int argc, char *argv[]);
 int main(int argc, char *argv[])
 {
   int successIndicated = 0; 
+  
+  if(!systemSanityCheck()){ 
+    printf("Error: System incompatibility detected\n"); 
+    exit(1);
+  }
   
   if      (argc < 2)                                                     showHelpExit(); 
   else if (!strcmp(argv[CLIENT_OR_SERVER], "client")) successIndicated = initializeClient(argc, argv);
@@ -38,6 +44,25 @@ int main(int argc, char *argv[])
   
   printf("Operation Completed\n"); //note that server blocks and will never get here on success
   return 0;
+}
+
+
+//NOTE: Because we mmap files for reading and writing, and need to use offsets, and mmap offsets need to be multiples of
+//the system page size, currently only supporting standard page sizes (all popular architectures normal page sizes supported
+//and several possible huge page sizes supported as well), TODO add support for arbitrary page sizes, relevant files are 
+//ogEnums (FILE_CHUNK_BYTESIZE = 2097152), and the files that use this (client, for determining how much incoming file data to write to
+//the drive at a time, and {file cache related files} for determining how much file data to read in at a time. 
+static int systemSanityCheck()
+{
+  long pageBytesize;  
+  pageBytesize = sysconf(_SC_PAGE_SIZE);
+  
+  if( pageBytesize != 4096 && pageBytesize != 8192 && pageBytesize != 65536 && pageBytesize != 262144 && pageBytesize != 1048576 && pageBytesize != 2097152){
+    printf("Error: Currently only systems using 4096, 8129, 65536, 262144, 1048576, and 2097125 byte page sizes are currently supported\n");
+    return 0;
+  }
+  
+  return 1;
 }
 
 

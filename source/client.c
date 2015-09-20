@@ -160,13 +160,15 @@ static int getFiles(clientObject *this)
 
 
 /*
- * getIncomingFile returns NULL on error and a dataContainer with the received file on success
+ * getIncomingFile returns 0 on error and 1 on success TODO check int types
  */ 
 static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
 {
-  dataContainerObject *incomingFileChunk;
-  uint32_t            incomingFileBytesize;
-  uint64_t            bytesToGet; 
+  dataContainerObject *incomingFileChunk   = NULL;
+  uint32_t            incomingFileBytesize = 0; 
+  uint64_t            bytesToGet           = 0; 
+  uint32_t            bytesWritten         = 0; 
+  uint32_t            writeOffset          = FILE_START; 
   
   if(this == NULL || diskFile == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -193,12 +195,15 @@ static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
       printf("Error: Failed to receive data, aborting\n");
       return 0; 
     }
-        
-    //then write it to the disk
-    if( !diskFile->diskFileWrite(diskFile, incomingFileChunk) ){
+    
+    //then write it to disk
+    bytesWritten = diskFile->diskFileWrite(diskFile, incomingFileChunk, writeOffset);
+    if(bytesWritten == 0){
       printf("Error: Failed to write file to disk, aborting\n");
       return 0;
     }
+    writeOffset += bytesWritten; 
+    
     
     //then destroy the data container that holds the current file chunk in RAM
     if( !incomingFileChunk->destroyDataContainer(&incomingFileChunk) ){

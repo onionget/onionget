@@ -26,8 +26,6 @@ fileBankObject *newFileBank(void)
   
   
   fileBank->getFile = &getFile; 
-  
-  
 }
 
 
