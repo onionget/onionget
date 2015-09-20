@@ -164,11 +164,9 @@ static int getFiles(clientObject *this)
  */ 
 static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
 {
-  dataContainerObject *incomingFileChunk   = NULL;
-  uint32_t            incomingFileBytesize = 0;
-  uint32_t            bytesWritten         = 0;
-  uint32_t            fpOffset             = 0; 
-  uint64_t            bytesToGet           = 0; 
+  dataContainerObject *incomingFileChunk;
+  uint32_t            incomingFileBytesize;
+  uint64_t            bytesToGet; 
   
   if(this == NULL || diskFile == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -190,19 +188,17 @@ static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
     bytesToGet = (incomingFileBytesize <= FILE_CHUNK_BYTESIZE) ? incomingFileBytesize : FILE_CHUNK_BYTESIZE; 
         
     //get up to FILE_CHUNK_BYTESIZE bytes of the file
-    incomingFileChunk = this->router->receive(this->router,  bytesToGet);
+    incomingFileChunk = this->router->receive(this->router, bytesToGet);
     if(incomingFileChunk == NULL){
       printf("Error: Failed to receive data, aborting\n");
       return 0; 
     }
         
-    bytesWritten = diskFile->diskFileWrite(diskFile, incomingFileChunk, fpOffset);     
     //then write it to the disk
-    if( !bytesWritten ){
+    if( !diskFile->diskFileWrite(diskFile, incomingFileChunk) ){
       printf("Error: Failed to write file to disk, aborting\n");
       return 0;
     }
-    fpOffset += bytesWritten; 
     
     //then destroy the data container that holds the current file chunk in RAM
     if( !incomingFileChunk->destroyDataContainer(&incomingFileChunk) ){
