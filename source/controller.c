@@ -5,7 +5,7 @@
 
 #include "client.h"
 #include "server.h"
-#include "og_enums.h" 
+#include "ogEnums.h" 
 
 //                            0          1           2                3                   4                      5                                6       7             8+ 
 //client input format :  [./onionGet] [client] [tor bind address] [tor listen port]  [onion address]       [onion port]                    [operation] [save path] [filenames...] 
@@ -46,8 +46,8 @@ int main(int argc, char *argv[])
 //returns 0 on error
 static int initializeClient(int argc, char *argv[])
 {
-  client   *client;
-  uint64_t fileCount;
+  clientObject   *client;
+  uint64_t       fileCount;
   
   if( argv[C_TOR_BIND_ADDRESS] == NULL || argv[C_TOR_PORT] == NULL || argv[C_ONION_ADDRESS] == NULL || argv[C_ONION_PORT] == NULL || argv[C_OPERATION] == NULL || argv[C_DIR_PATH] == NULL || argv[C_FIRST_FILE_NAME] == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -124,11 +124,12 @@ static int clientSanityCheck(char *onionPort, char *onionAddress, char *operatio
 
 /*** SERVER FUNCTIONS ****/ 
 
+//TODO check int types not using uint64_t anymore 
 static int initializeServer(int argc, char *argv[])
 {
-  server    *server;
-  int       listenPort;
-  uint64_t  maxMemoryCacheMegabytes;
+  serverObject *server;
+  int          listenPort;
+  uint64_t     maxMemoryCacheMegabytes;
   
   if( argv[S_BIND_ADDRESS] == NULL || argv[S_LISTEN_PORT] == NULL || argv[S_DIR_PATH] == NULL || argv[S_MEM_MEGA_CACHE] == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");

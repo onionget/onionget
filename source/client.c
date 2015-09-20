@@ -5,21 +5,21 @@
 #include  <unistd.h>
 
 #include "router.h"
-#include "datacontainer.h"
-#include "memorymanager.h"
-#include "diskfile.h" 
+#include "dataContainer.h"
+#include "memoryManager.h"
+#include "diskFile.h" 
 #include "client.h"
-#include "og_enums.h" 
+#include "ogEnums.h" 
 
 //PUBLIC METHODS
-static int        executeOperation(client *this);
-static int        getFiles(client *this);
+static int        executeOperation(clientObject *this);
+static int        getFiles(clientObject *this);
 
 //PRIVATE METHODS
-static int        establishConnection(client *this);
-static uint32_t   calculateTotalRequestBytesize(client *this);
-static int        sendRequestedFilenames(client *this);
-static int        getIncomingFile(client *this, diskFile *diskFile);
+static int        establishConnection(clientObject *this);
+static uint32_t   calculateTotalRequestBytesize(clientObject *this);
+static int        sendRequestedFilenames(clientObject *this);
+static int        getIncomingFile(clientObject *this, diskFileObject *diskFile);
 
 
 
@@ -30,9 +30,9 @@ static int        getIncomingFile(client *this, diskFile *diskFile);
  * is already constructed.  
  * 
  */
-client *newClient(char *torBindAddress, char *torPort, char *onionAddress, char *onionPort, char *operation, char *dirPath, char **fileNames, uint32_t fileCount)
+clientObject *newClient(char *torBindAddress, char *torPort, char *onionAddress, char *onionPort, char *operation, char *dirPath, char **fileNames, uint32_t fileCount)
 {
-  client *this; 
+  clientObject *this; 
   
   if(torBindAddress == NULL || torPort == NULL || onionAddress == NULL || onionPort == NULL || operation == NULL || dirPath == NULL || *fileNames == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -40,7 +40,7 @@ client *newClient(char *torBindAddress, char *torPort, char *onionAddress, char 
   }
 
   //allocate memory for the client object
-  this = (client *)secureAllocate(sizeof(*this));
+  this = (clientObject *)secureAllocate(sizeof(*this));
   if(this == NULL){
    printf("Error: Failed to instantiate a client\n");
    return NULL; 
@@ -89,7 +89,7 @@ client *newClient(char *torBindAddress, char *torPort, char *onionAddress, char 
  * executeOperation returns 0 on error and 1 on success, this decides what to do based on the operation property of the client object
  * right now the only possible operation is --get which gets files from the server
  */
-static int executeOperation(client *this)
+static int executeOperation(clientObject *this)
 {
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -106,11 +106,11 @@ static int executeOperation(client *this)
  * getFiles returns 0 on error and 1 on success, it sends the server the file request string, then goes through each file name 
  * and writes it to the disk with the data received from the server for that file name
  */
-static int getFiles(client *this)
+static int getFiles(clientObject *this)
 {
-  int           currentFile;
-  uint32_t      fileCount; 
-  diskFile      *diskFile; 
+  int            currentFile;
+  uint32_t       fileCount; 
+  diskFileObject *diskFile; 
   
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -162,11 +162,11 @@ static int getFiles(client *this)
 /*
  * getIncomingFile returns NULL on error and a dataContainer with the received file on success
  */ 
-static int getIncomingFile(client *this, diskFile *diskFile)
+static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
 {
-  dataContainer *incomingFileChunk;
-  uint32_t      incomingFileBytesize;
-  uint64_t      bytesToGet; 
+  dataContainerObject *incomingFileChunk;
+  uint32_t            incomingFileBytesize;
+  uint64_t            bytesToGet; 
   
   if(this == NULL || diskFile == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -219,7 +219,7 @@ static int getIncomingFile(client *this, diskFile *diskFile)
 
 //[request string bytesize][first filename bytesize][first file name][second filename bytesize][second file name]
 
-static int sendRequestedFilenames(client *this)
+static int sendRequestedFilenames(clientObject *this)
 {
   uint32_t fileRequestStringBytesize;
   uint32_t currentFile;
@@ -262,7 +262,7 @@ static int sendRequestedFilenames(client *this)
 /*
  * calculateTotalRequestBytesize returns -1 on error and the bytesize of the file request string on success
  */
-static uint32_t calculateTotalRequestBytesize(client *this)
+static uint32_t calculateTotalRequestBytesize(clientObject *this)
 {
   uint32_t fileRequestStringBytesize; 
   uint32_t currentFile;
@@ -288,7 +288,7 @@ static uint32_t calculateTotalRequestBytesize(client *this)
 /*
  * establishConnection returns 0 on error and 1 on success, it connects the client object to the server 
  */
-static int establishConnection(client *this)
+static int establishConnection(clientObject *this)
 {
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been"); 

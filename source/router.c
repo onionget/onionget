@@ -18,29 +18,29 @@
 //
 
 #include "router.h"
-#include "datacontainer.h"
-#include "memorymanager.h"
-#include "og_enums.h"
+#include "dataContainer.h"
+#include "memoryManager.h"
+#include "ogEnums.h"
 
 
 
 //public methods
-static dataContainer  *receive            ( router *this            , uint32_t payloadBytesize                                                     );
-static int            transmit            ( router *this            , void *payload              , uint32_t payloadBytesize                        );
-static int            socks5Connect       ( router *this            , char *destAddress          , uint8_t destAddressBytesize , uint16_t destPort );
-static int            transmitBytesize    ( router *this            , uint32_t bytesize                                                            );
-static uint32_t       getIncomingBytesize ( router *this                                                                                           ); //note that this only gets incoming bytesize if the incoming bytesize is actually sent, as a uint32_t 
-static int            ipv4Connect         ( router *this            , char *ipv4Address          , char *port                                      );
-static int            setSocket           ( router *this            , int socket                                                                   );
-static int            destroyRouter       ( router **thisPointer                                                                                   );
-static int            ipv4Listen          ( router *this            , char *ipv4Address          , int port                                        );
-static int            getConnection       ( router *this                                                                                           );
+static dataContainerObject  *receive            ( routerObject *this            , uint32_t payloadBytesize                                                     );
+static int                  transmit            ( routerObject *this            , void *payload              , uint32_t payloadBytesize                        );
+static int                  socks5Connect       ( routerObject *this            , char *destAddress          , uint8_t destAddressBytesize , uint16_t destPort );
+static int                  transmitBytesize    ( routerObject *this            , uint32_t bytesize                                                            );
+static uint32_t             getIncomingBytesize ( routerObject *this                                                                                           ); //note that this only gets incoming bytesize if the incoming bytesize is actually sent, as a uint32_t 
+static int                  ipv4Connect         ( routerObject *this            , char *ipv4Address          , char *port                                      );
+static int                  setSocket           ( routerObject *this            , int socket                                                                   );
+static int                  destroyRouter       ( routerObject **thisPointer                                                                                   );
+static int                  ipv4Listen          ( routerObject *this            , char *ipv4Address          , int port                                        );
+static int                  getConnection       ( routerObject *this                                                                                           );
 
 //private methods
-static int socksResponseValidate          ( router *this                                                                                           );
-static int sendSocks5ConnectRequest       ( router *this            , char *destAddress          , uint8_t destAddressBytesize , uint16_t destPort );
-static int initializeSocks5Protocol       ( router *this                                                                                           );
-static int setSocketRecvTimeout           ( router *this            , int timeoutSecs            , int timeoutUsecs                                );
+static int socksResponseValidate          ( routerObject *this                                                                                           );
+static int sendSocks5ConnectRequest       ( routerObject *this            , char *destAddress          , uint8_t destAddressBytesize , uint16_t destPort );
+static int initializeSocks5Protocol       ( routerObject *this                                                                                           );
+static int setSocketRecvTimeout           ( routerObject *this            , int timeoutSecs            , int timeoutUsecs                                );
 
 
 
@@ -52,10 +52,10 @@ static int setSocketRecvTimeout           ( router *this            , int timeou
 /*
  * newRouter returns a new router object on success and NULL on error.  
  */
-router *newRouter(void)
+routerObject *newRouter(void)
 {
   //allocate memory for the router object
-  router *this = (router *)secureAllocate(sizeof(*this));
+  routerObject *this = (routerObject *)secureAllocate(sizeof(*this));
   if(this == NULL){
     printf("Error: Failed to allocate memory for router object\n");
     return NULL;  
@@ -89,9 +89,9 @@ router *newRouter(void)
 /*
  * destroyRouter returns 0 on error and 1 on success. It frees the memory associated with the router object. 
  */
-static int destroyRouter(router **thisPointer)
+static int destroyRouter(routerObject **thisPointer)
 {
-  router *this;
+  routerObject *this;
  
   this = *thisPointer;
   
@@ -113,11 +113,11 @@ static int destroyRouter(router **thisPointer)
 /*
  * recieve returns NULL on error, and a datacontainer containing payloadBytesize of incoming traffic on the socket on success
  */
-static dataContainer *receive(router *this, uint32_t payloadBytesize)
+static dataContainerObject *receive(routerObject *this, uint32_t payloadBytesize)
 {
-  dataContainer   *receivedMessage;
-  size_t          bytesReceived;
-  size_t          recvReturn;
+  dataContainerObject   *receivedMessage;
+  size_t                bytesReceived;
+  size_t                recvReturn;
   
   //basic sanity checks
   if(this == NULL){
@@ -156,10 +156,10 @@ static dataContainer *receive(router *this, uint32_t payloadBytesize)
  * 
  * returns 0 on error, note that 0 is also an invalid bytesize for the client to send (TODO: maybe set errno or something) 
  */
-static uint32_t getIncomingBytesize(router *this)
+static uint32_t getIncomingBytesize(routerObject *this)
 {
-  uint32_t      incomingBytesize;
-  dataContainer *incomingBytesizeContainer;
+  uint32_t            incomingBytesize;
+  dataContainerObject *incomingBytesizeContainer;
   
   //basic sanity check
   if(this == NULL){
@@ -190,7 +190,7 @@ static uint32_t getIncomingBytesize(router *this)
 /*
  * transmit sends payloadBytesize bytes of the buffer pointed to by payload, returns 0 on error and 1 on success
  */
-static int transmit(router *this, void *payload, uint32_t payloadBytesize)
+static int transmit(routerObject *this, void *payload, uint32_t payloadBytesize)
 {
   size_t sentBytes;  
   size_t sendReturn;
@@ -221,7 +221,7 @@ static int transmit(router *this, void *payload, uint32_t payloadBytesize)
  * transmityBytesize returns 0 on error and 1 on success. It sends the network encoded bytesize value (bytesize) over the connected socket.
  * This is intended to be received by the function getIncomingBytesize. 
  */
-static int transmitBytesize(router *this, uint32_t bytesize)
+static int transmitBytesize(routerObject *this, uint32_t bytesize)
 {
   uint32_t bytesizeEncoded;
   
@@ -254,7 +254,7 @@ static int transmitBytesize(router *this, uint32_t bytesize)
  * socks5Connect establishes a socks 5 connection to destAddress on destPort. Returns 0 on error and 1 on success. See also
  * initializeSocks5Protocol, sendSocks5ConnectRequest, and socksResponseValidate. reference https://www.ietf.org/rfc/rfc1928.txt
  */
-static int socks5Connect(router *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort)
+static int socks5Connect(routerObject *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort)
 {  
   if(this == NULL || destAddress == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -290,7 +290,7 @@ static int socks5Connect(router *this, char *destAddress, uint8_t destAddressByt
  * NOTE: address must be in ipv4 format
  * returns 0 on error and 1 on success
  */
-static int ipv4Connect(router *this, char *ipv4Address, char *port)
+static int ipv4Connect(routerObject *this, char *ipv4Address, char *port)
 {
   struct addrinfo connectionInformation;
   struct addrinfo *encodedAddress;
@@ -347,7 +347,7 @@ static int ipv4Connect(router *this, char *ipv4Address, char *port)
  * ipv4Listen puts the router into a listening state by creating a socket bound to ipv4Address:port and listening on it
  * returns 0 on error and 1 on success
  */
-int ipv4Listen(router *this, char *ipv4Address, int port)
+int ipv4Listen(routerObject *this, char *ipv4Address, int port)
 {
   struct sockaddr_in bindInfo;
   struct in_addr     formattedAddress;
@@ -400,7 +400,7 @@ int ipv4Listen(router *this, char *ipv4Address, int port)
  * getConnection gets a connection on the listening socket, which must already be initialized (see ipv4Listen)
  * returns -1 on error and the accepted connection on success
  */
-static int getConnection(router *this)
+static int getConnection(routerObject *this)
 {
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -420,7 +420,7 @@ static int getConnection(router *this)
  * setSocket sets the routers socket to the argument socket
  * returns 0 on error and 1 on success
  */
-static int setSocket(router *this, int socket)
+static int setSocket(routerObject *this, int socket)
 {
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been");
@@ -442,7 +442,7 @@ static int setSocket(router *this, int socket)
  * 
  * returns 0 on error and 1 on success. 
  */
-static int setSocketRecvTimeout(router *this, int timeoutSecs, int timeoutUsecs)
+static int setSocketRecvTimeout(routerObject *this, int timeoutSecs, int timeoutUsecs)
 {
   struct timeval  recvTimeout;
   
@@ -477,9 +477,9 @@ static int setSocketRecvTimeout(router *this, int timeoutSecs, int timeoutUsecs)
  * returns 1 on success, 0 on error (or failure in that the proxy server doesn't support our requirements). 
  * 
  */
-static int initializeSocks5Protocol(router *this)
+static int initializeSocks5Protocol(routerObject *this)
 { 
-  dataContainer *proxyResponse;
+  dataContainerObject *proxyResponse;
   
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -525,10 +525,10 @@ static int initializeSocks5Protocol(router *this)
  * returns 0 on error (or failure), 1 on success. 
  * NOTE: desAddress should be a URL (I don't think this currently supports IP addresses, but TODO I should look into this) 
  */
-static int sendSocks5ConnectRequest(router *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort)
+static int sendSocks5ConnectRequest(routerObject *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort)
 {
-  int           requestBytesize;
-  dataContainer *socksRequest;
+  int                 requestBytesize;
+  dataContainerObject *socksRequest;
   
   if(this == NULL || destAddress == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -590,9 +590,9 @@ static int sendSocks5ConnectRequest(router *this, char *destAddress, uint8_t des
  * returns 0 on error (or failure) and 1 on success. 
  * 
  */
-static int socksResponseValidate(router *this)
+static int socksResponseValidate(routerObject *this)
 {
-  dataContainer *proxyResponse;
+  dataContainerObject *proxyResponse;
   
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");

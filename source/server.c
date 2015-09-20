@@ -7,23 +7,23 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "datacontainer.h"
-#include "activeconnection.h" 
+#include "dataContainer.h"
+#include "connection.h" 
 #include "router.h"
-#include "dlinkedlist.h"
-#include "memorymanager.h"
-#include "diskfile.h"
+#include "dll.h"
+#include "memoryManager.h"
+#include "diskFile.h"
 #include "server.h"
-#include "og_enums.h"
+#include "ogEnums.h"
 
-static void *processConnection(void *activeConnectionV);
-int prepareSharedFiles(server *this);
-static int serverListen(server *this);
+static void *processConnection(void *connectionObjectV);
+int prepareSharedFiles(serverObject *this);
+static int serverListen(serverObject *this);
 
 
-static int sendFileNotFound(activeConnection *connection);
-static int sendNextRequestedFile(activeConnection *connection);
-static dataContainer *getRequestedFilename(activeConnection *connection);
+static int sendFileNotFound(connectionObject *connection);
+static int sendNextRequestedFile(connectionObject *connection);
+static dataContainerObject *getRequestedFilename(connectionObject *connection);
 
 //0         1               2               3                    4
 //[exe] [server address] [server port] [shared folder path] [memory cache megabyte size (max 4294)] 
@@ -38,23 +38,23 @@ static dataContainer *getRequestedFilename(activeConnection *connection);
  * 
  * returns pointer to server object on success, pointer to NULL on error
  */
-server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uint16_t maxMemoryCacheMegabytes)
+serverObject *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uint16_t maxMemoryCacheMegabytes)
 {
-  server *this; 
+  serverObject *this; 
     
   if(sharedFolderPath == NULL || bindAddress == NULL){
     printf("Error: Something was NULL that shouldn't have beenaaaaaa\n");
     return NULL;
   }
   
-  this = (server *)secureAllocate(sizeof(*this));
+  this = (serverObject *)secureAllocate(sizeof(*this));
   if(this == NULL){ 
     printf("Error: Failed to allocate memory to instantiate server\n");
     return NULL; 
   }
   
   
-  //simple unsigned integer wrap protection, limits cache to slight over four gigabytes
+  //simple unsigned integer wrap protection, limits cache to slightly over four gigabytes
   if(maxMemoryCacheMegabytes > UINT32_MAX / BYTES_IN_A_MEGABYTE){
     printf("Error: maximum cache megabyte size supported is %lu, as cache is internally stored in bytes in a uint32_t\n", (unsigned long) (UINT32_MAX / BYTES_IN_A_MEGABYTE) ); 
     return NULL; 
@@ -105,13 +105,13 @@ server *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uin
 /************ PUBLIC METHODS *************/
 
 //returns 0 on error, otherwise doesn't return
-static int serverListen(server *this)
+static int serverListen(serverObject *this)
 {
   pthread_t        processingThread;
-  activeConnection *connection;
+  connectionObject *connection;
   
   if(this == NULL){
-    printf("Error: Something was NULL that shouldn't have beenaaaaaa\n");
+    printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
   
@@ -136,7 +136,7 @@ static int serverListen(server *this)
       }
      
       if( !secureFree(&connection, sizeof(*connection)) ){
-        printf("Error: Failed to free activeConnection object\n");
+        printf("Error: Failed to free connectionObject object\n");
         return 0;
       }
     }
@@ -155,12 +155,12 @@ static int serverListen(server *this)
 
 static void *processConnection(void *connectionV)
 {
-  activeConnection *connection;
+  connectionObject *connection;
   uint32_t         totalBytesize;
   uint32_t         filenameBytesize; 
   
   //give the connectionV the correct cast
-  connection = (activeConnection*)connectionV;
+  connection = (connectionObject*)connectionV;
   
   //basic sanity checking
   if( connection == NULL || connection->connectedRouter == NULL || connection->server == NULL ){
@@ -185,14 +185,13 @@ static void *processConnection(void *connectionV)
     }
   }
     
-
   cleanup:  
-    if(connection != NULL && !connection->destroyActiveConnection(&connection)) printf("Error: Failed to destroy active connection object\n"); 
+    if(connection != NULL && !connection->destroyConnectionObject(&connection)) printf("Error: Failed to destroy active connection object\n"); 
     return NULL;  
 }
   
 //returns pointer to NULL on error   
-static dataContainer *getRequestedFilename(activeConnection *connection)
+static dataContainerObject *getRequestedFilename(connectionObject *connection)
 {
   uint32_t fileIdBytesize;
   
@@ -205,11 +204,11 @@ static dataContainer *getRequestedFilename(activeConnection *connection)
 }
   
 //returns bytesize of sent filename (or -1 on error); 
-static int sendNextRequestedFile(activeConnection *connection)
+static int sendNextRequestedFile(connectionObject *connection)
 {
-  dataContainer *currentFilename = NULL; 
-  dataContainer *outgoingFile    = NULL; 
-  uint32_t      filenameBytesize = 0;
+  dataContainerObject *currentFilename = NULL; 
+  dataContainerObject *outgoingFile    = NULL; 
+  uint32_t            filenameBytesize = 0;
   
   if(connection == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -251,7 +250,7 @@ static int sendNextRequestedFile(activeConnection *connection)
 }
   
   
-static int sendFileNotFound(activeConnection *connection)
+static int sendFileNotFound(connectionObject *connection)
 {
   if( !connection->connectedRouter->transmitBytesize( connection->connectedRouter, strlen("not found") ) ){ 
     return 0;
@@ -266,13 +265,13 @@ static int sendFileNotFound(activeConnection *connection)
 
 
 //returns 0 on error
-int prepareSharedFiles(server *this)
+int prepareSharedFiles(serverObject *this)
 {
-  uint32_t      currentlyCachedBytes;
-  DIR           *directory; 
-  struct dirent *fileEntry; 
-  diskFile      *diskFile; 
-  long          currentFileBytesize; 
+  uint32_t            currentlyCachedBytes;
+  DIR                 *directory; 
+  struct dirent       *fileEntry; 
+  diskFileObject      *diskFile; 
+  long                currentFileBytesize; 
   
   if(this == NULL){
     printf("Error: Something was NULL that shouldn't have beeaaan\n");
@@ -304,7 +303,7 @@ int prepareSharedFiles(server *this)
     }
     
     //if adding the file to the cache will exhaust the cache space then don't add it to the linked list
-    if( (currentlyCachedBytes + currentFileBytesize) > this->maxMemoryCacheBytesize ){
+    if( (currentlyCachedBytes + currentFileBytesize) > this->maxMemoryCacheBytesize ){ //TODO keep track of size of cache in fileBank? 
       printf("Notice: Adding file %s will exhaust available cache, skipping\n", fileEntry->d_name); 
       diskFile->closeTearDown(&diskFile);
       continue; 

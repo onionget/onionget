@@ -2,19 +2,19 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "memorymanager.h"
-#include "activeconnection.h"
+#include "memoryManager.h"
+#include "connection.h"
 #include "server.h"
 #include "router.h"
 
-static int destroyActiveConnection(activeConnection **thisPointer);
+static int destroyConnectionObject(connectionObject **thisPointer);
 
 /*
- * Keeps trying to allocate an activeConnection object, if fails due to out of memory, sleeps one second and tries again forever
+ * Keeps trying to allocate an connectionObject object, if fails due to out of memory, sleeps one second and tries again forever
  */
-activeConnection *newActiveConnection(server *server) //TODO consider adding timeout period or something, currently this can block forever, though
-{                                                          //typically this will be desired behavior... //TODO stop using type name as var name! 
-  activeConnection *connection;
+connectionObject *newActiveConnection(serverObject *server) //TODO consider adding timeout period or something, currently this can block forever, though
+{                                                           //typically this will be desired behavior...  
+  connectionObject *connection;
   
   if(server == NULL){
     printf("Error: Something was NULL that shouldn't have beena\n");
@@ -22,7 +22,7 @@ activeConnection *newActiveConnection(server *server) //TODO consider adding tim
   }
   
   do{
-    connection = (activeConnection *)secureAllocate(sizeof(*connection));
+    connection = (connectionObject *)secureAllocate(sizeof(*connection));
     if(connection == NULL){
       sleep(1);
       continue; 
@@ -36,16 +36,16 @@ activeConnection *newActiveConnection(server *server) //TODO consider adding tim
     }
     
     connection->server                  = server;
-    connection->destroyActiveConnection = &destroyActiveConnection; 
+    connection->destroyConnectionObject = &destroyConnectionObject; 
     break; 
   }while(1);
     
   return connection; 
 }
 
-static int destroyActiveConnection(activeConnection **thisPointer)
+static int destroyConnectionObject(connectionObject **thisPointer)
 {
-  activeConnection  *this; 
+  connectionObject  *this; 
   
   this = *thisPointer; 
   
@@ -59,7 +59,7 @@ static int destroyActiveConnection(activeConnection **thisPointer)
     return 0; 
   }
   
-  if(!secureFree(thisPointer, sizeof(struct activeConnection)) ){
+  if(!secureFree(thisPointer, sizeof(struct connectionObject)) ){
     printf("Error: Failed to free the active connection object\n");
     return 0;
   }

@@ -4,27 +4,27 @@
 #include <stdint.h>
 #include <unistd.h>
 
-#include "datacontainer.h"
-#include "diskfile.h"
-#include "memorymanager.h"
-#include "og_enums.h"
+#include "dataContainer.h"
+#include "diskFile.h"
+#include "memoryManager.h"
+#include "ogEnums.h"
 
 
 
 //PUBLIC METHODS
-static int             diskFileWrite(diskFile *this, dataContainer *dataContainer);
-static dataContainer   *diskFileRead(diskFile *this);
-static int             closeTearDown(diskFile **thisPointer);
-static long            getBytesize(diskFile *this);
+static int                   diskFileWrite(diskFileObject *this, dataContainerObject *dataContainer);
+static dataContainerObject   *diskFileRead(diskFileObject *this);
+static int                   closeTearDown(diskFileObject **thisPointer);
+static long                  getBytesize(diskFileObject *this);
 
 
 //PRIVATE METHODS
-static int diskFileOpen(diskFile *this, char *mode);
+static int diskFileOpen(diskFileObject *this, char *mode);
 static int fileModeReadable(char *mode);
 static int fileModeWritable(char *mode);
 static int fileModeValid(char *mode);
 static int fileModeSeekable(char *mode); 
-static int initializePathProperties(diskFile *this, char *path, char *name);
+static int initializePathProperties(diskFileObject *this, char *path, char *name);
 
 /************ OBJECT CONSTRUCTOR ******************/
 
@@ -32,9 +32,9 @@ static int initializePathProperties(diskFile *this, char *path, char *name);
  * newDiskFile returns NULL on error and a new diskFile object on success. The file identified by /path/name is already open in the passed mode. 
  * path doesn't need to end with /, if it doesn't it will be added by initializePathProperties. 
  */
-diskFile *newDiskFile(char *path, char *name, char *mode)
+diskFileObject *newDiskFile(char *path, char *name, char *mode)
 {
-  diskFile  *this;
+  diskFileObject  *this;
  
   if( path == NULL || name == NULL || mode == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -48,7 +48,7 @@ diskFile *newDiskFile(char *path, char *name, char *mode)
   }
     
   //allocate memory for the object
-  this = (diskFile *)secureAllocate(sizeof(*this)); 
+  this = (diskFileObject *)secureAllocate(sizeof(*this)); 
   if(this == NULL){
     printf("Error: Failed to allocate memory for disk file\n");
     return NULL; 
@@ -84,7 +84,7 @@ diskFile *newDiskFile(char *path, char *name, char *mode)
 /*
  * getBytesize returns -1 on error, and the bytesize of the initialized diskFile on success
  */
-static long getBytesize(diskFile *this)
+static long getBytesize(diskFileObject *this)
 {
   long fileBytesize; 
   
@@ -122,9 +122,9 @@ static long getBytesize(diskFile *this)
  * closeTearDown returns 0 on error and 1 on success. It closes the file descriptor if it is open, and destroys the struct. (Not named destroy because it doesn't
  * destroy the file on the fisk and might be a confusing name). 
  */
-static int closeTearDown(diskFile **thisPointer)
+static int closeTearDown(diskFileObject **thisPointer)
 {
-  diskFile *this;
+  diskFileObject *this;
   
   this = *thisPointer; 
   
@@ -157,7 +157,7 @@ static int closeTearDown(diskFile **thisPointer)
 /*
  * diskFileWrite returns 0 on error and 1 on success. It writes the data in dataContainer to the file on the disk associated with the diskFile object. 
  */
-static int diskFileWrite(diskFile *this, dataContainer *dataContainer) 
+static int diskFileWrite(diskFileObject *this, dataContainerObject *dataContainer) 
 {  
   if(this == NULL || dataContainer == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -187,10 +187,10 @@ static int diskFileWrite(diskFile *this, dataContainer *dataContainer)
 /*
  * diskFileRead returns NULL on error and a pointer to a dataContainer holding the data from the file associated with the diskFile object on success.
  */
-static dataContainer *diskFileRead(diskFile *this)
+static dataContainerObject *diskFileRead(diskFileObject *this)
 {
-  dataContainer *dataContainer; 
-  long int      fileBytesize;
+  dataContainerObject *dataContainer; 
+  long int            fileBytesize;
 
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -242,7 +242,7 @@ static dataContainer *diskFileRead(diskFile *this)
  * is one to two bytes larger than the exact memory used to hold the full path, because this->fullPath ends with one to two NULLs depending on if the passed
  * in path ends with a '/' or not. this->fullPathBytesize is exactly equal to the bytesize of this->fullPath though, counting the terminating NULL(s). 
  */
-int initializePathProperties(diskFile *this, char *path, char *name)
+int initializePathProperties(diskFileObject *this, char *path, char *name)
 {
   size_t  pathBytesize;
   size_t  nameBytesize;
@@ -282,7 +282,7 @@ int initializePathProperties(diskFile *this, char *path, char *name)
 /*
  * diskFileOpen returns 0 on error and 1 on success. Sets this->descriptor to an fd for file at this->fullPath opened in mode mode, and sets this->mode to mode. 
  */
-static int diskFileOpen(diskFile *this, char *mode)
+static int diskFileOpen(diskFileObject *this, char *mode)
 {
   if( this == NULL || mode == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");

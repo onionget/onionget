@@ -1,23 +1,23 @@
 #pragma once
 #include <stdint.h>
-#include "datacontainer.h"
+#include "dataContainer.h"
 
 
-typedef struct router{
+typedef struct routerObject{
   int socket;
   
-  int (*socks5Connect)(struct router *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort);
-  dataContainer *(*receive)(struct router *this, uint32_t payloadBytesize);
-  int (*transmit)(struct router *this, void *payload, uint32_t payloadBytesize);
-  int (*transmitBytesize)(struct router *this, uint32_t bytesize);
-  uint32_t (*getIncomingBytesize)(struct router *this);
-  int (*ipv4Connect)(struct router *this, char *ipv4Address, char *port);
-  int (*ipv4Listen)(struct router *this, char *address, int port);
-  int  (*getConnection)(struct router *this);
-  int  (*setSocket)(struct router *this, int socket);
-  int (*destroyRouter)(struct router **thisPointer); 
-}router;
+  int (*socks5Connect)(struct routerObject *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort);
+  dataContainerObject *(*receive)(struct routerObject *this, uint32_t payloadBytesize);
+  int (*transmit)(struct routerObject *this, void *payload, uint32_t payloadBytesize);
+  int (*transmitBytesize)(struct routerObject *this, uint32_t bytesize);
+  uint32_t (*getIncomingBytesize)(struct routerObject *this);
+  int (*ipv4Connect)(struct routerObject *this, char *ipv4Address, char *port);
+  int (*ipv4Listen)(struct routerObject *this, char *address, int port);
+  int  (*getConnection)(struct routerObject *this);
+  int  (*setSocket)(struct routerObject *this, int socket);
+  int (*destroyRouter)(struct routerObject **thisPointer); 
+}routerObject;
 
 
-router* newRouter(void);
+routerObject* newRouter(void);
 

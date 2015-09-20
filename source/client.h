@@ -2,11 +2,11 @@
 
 #include <stdint.h>
 #include "router.h"
-#include "datacontainer.h"
+#include "dataContainer.h"
 
 
-typedef struct client{
-  router        *router;
+typedef struct clientObject{
+  routerObject  *router;
   char          *torBindAddress;
   char          *torPort;
   char          *onionAddress;
@@ -17,9 +17,9 @@ typedef struct client{
   uint32_t      fileCount;
   char          **fileNames; 
   
-  int          (*executeOperation)(struct client *this); 
-  int           (*getFiles)(struct client *this);   
-}client; 
+  int          (*executeOperation)(struct clientObject *this); 
+  int           (*getFiles)(struct clientObject *this);   
+}clientObject; 
 
-client* newClient(char *torBindAddress, char *torPort, char *onionAddress, char *onionPort, char *operation, char *dirPath, char **fileNames, uint32_t fileCount);
+clientObject* newClient(char *torBindAddress, char *torPort, char *onionAddress, char *onionPort, char *operation, char *dirPath, char **fileNames, uint32_t fileCount);
 

@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include "memorymanager.h"
+#include "memoryManager.h"
 
 static int memoryClear(volatile unsigned char *memoryPointer, size_t bytesize);
 

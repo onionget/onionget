@@ -3,10 +3,10 @@
 #include <string.h>
 #include <stdint.h>
 
-#include "datacontainer.h"
-#include "memorymanager.h"
+#include "dataContainer.h"
+#include "memoryManager.h"
 
-static int destroyDataContainer(dataContainer **thisPointer);
+static int destroyDataContainer(dataContainerObject **thisPointer);
 
 
 /************ OBJECT CONSTRUCTOR ******************/
@@ -19,12 +19,12 @@ static int destroyDataContainer(dataContainer **thisPointer);
  * the data pointer is of type unsigned char*, pointing to up to 2^64 bytes 
  *
  */
-dataContainer* newDataContainer(size_t bytesize)
+dataContainerObject *newDataContainer(size_t bytesize)
 {
-  dataContainer *this;
+  dataContainerObject *this;
   
   //allocate memory for data container
-  this = (dataContainer *)secureAllocate(sizeof(*this));
+  this = (dataContainerObject*)secureAllocate(sizeof(*this));
   if(this == NULL){
     printf("Error: Failed to allocate memory for data container\n");
     return NULL; 
@@ -51,9 +51,9 @@ dataContainer* newDataContainer(size_t bytesize)
 /*           
  * returns 0 on error and 1 on success. Simply frees the memory associated with the dataContainer (data buffer and object)
  */
-static int destroyDataContainer(dataContainer **thisPointer)
+static int destroyDataContainer(dataContainerObject **thisPointer)
 {
-  dataContainer  *this;
+  dataContainerObject *this;
   
   this = *thisPointer;   
   

@@ -4,7 +4,7 @@ CFLAGS = -lpthread  -Wall -I. -o $(name)
 
 VPATH=source
 
-SRCS= $(VPATH)/client.c $(VPATH)/activeconnection.c $(VPATH)/controller.c $(VPATH)/memorymanager.c $(VPATH)/router.c $(VPATH)/datacontainer.c $(VPATH)/server.c $(VPATH)/dlinkedlist.c $(VPATH)/diskfile.c
+SRCS= $(VPATH)/client.c $(VPATH)/connectionBank.c $(VPATH)/fileBank.c $(VPATH)/connection.c $(VPATH)/controller.c $(VPATH)/memoryManager.c $(VPATH)/router.c $(VPATH)/dataContainer.c $(VPATH)/server.c $(VPATH)/dll.c $(VPATH)/diskFile.c
 
 all: main
 
