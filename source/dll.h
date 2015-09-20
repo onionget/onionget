@@ -5,21 +5,19 @@
 
 typedef struct dllMember
 {
-  struct dllMember       *previous;
-  struct dllMember       *next;
-  char                   *identifier; 
-  size_t                 identifierBytesize; 
-  dataContainerObject    *dataContainer;
+  struct dllMember   *previous;
+  struct dllMember   *next;
+  void               *memberPointer; 
+  uint8_t            locked; 
 }dllMember;
 
 typedef struct dllObject{
   struct dllMember *head;
   struct dllMember *tail;
   
-  uint32_t memberCount; 
+  uint32_t count; 
   
-  dataContainerObject *(*getId)(struct dllObject *this, char *id, uint32_t idBytesize); 
-  int                  (*insert)(struct dllObject *this, int end, char *id, size_t idBytesize, dataContainerObject *dataContainer);  
+  int (*insert)(struct dllObject *this, int end, char *id, size_t idBytesize, dataContainerObject *dataContainer);  
 }dllObject;
 
 

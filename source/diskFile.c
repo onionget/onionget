@@ -12,7 +12,7 @@
 
 
 //PUBLIC METHODS
-static int                   diskFileWrite(diskFileObject *this, dataContainerObject *dataContainer);
+static uint32_t              diskFileWrite(diskFileObject *this, dataContainerObject *dataContainer, uint32_t fpOffset); 
 static dataContainerObject   *diskFileRead(diskFileObject *this);
 static int                   closeTearDown(diskFileObject **thisPointer);
 static long                  getBytesize(diskFileObject *this);
@@ -34,7 +34,7 @@ static int initializePathProperties(diskFileObject *this, char *path, char *name
  */
 diskFileObject *newDiskFile(char *path, char *name, char *mode)
 {
-  diskFileObject  *this;
+  diskFileObject  *this = NULL;
  
   if( path == NULL || name == NULL || mode == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -86,33 +86,32 @@ diskFileObject *newDiskFile(char *path, char *name, char *mode)
  */
 static long getBytesize(diskFileObject *this)
 {
-  long fileBytesize; 
+  long fileBytesize = 0; 
+  file *descriptor  = NULL;
   
-  if( this == NULL ){
+  if( this == NULL || this->descriptor == NULL ){
     printf("Error: Something was NULL that shouldn't have been");
     return -1; 
   }
+  
+  //we don't want to change the original pointer
+  descriptor = this->descriptor; 
   
   if( fileModeSeekable(this->mode) != 1 ){
     printf("Error: File mode is not seekable (or it's NULL)");
     return -1; 
   }
     
-  if( fseek(this->descriptor, 0, SEEK_END) == -1 ){
+  if( fseek(descriptor, 0, SEEK_END) == -1 ){
     printf("Error: Failed to seek to end of file\n");
     return -1; 
   }
   
-  if( (fileBytesize = ftell(this->descriptor)) == -1 ){
+  if( (fileBytesize = ftell(descriptor)) == -1 ){
     printf("Error: Failed to get file bytesize\n");
     return -1; 
   }
-  
-  if( fseek(this->descriptor, 0, 0) == -1 ){
-    printf("Error: Failed to seek to start of file\n");
-    return -1; 
-  }
-  
+    
   return fileBytesize; 
 }
 
@@ -124,7 +123,7 @@ static long getBytesize(diskFileObject *this)
  */
 static int closeTearDown(diskFileObject **thisPointer)
 {
-  diskFileObject *this;
+  diskFileObject *this = NULL;
   
   this = *thisPointer; 
   
@@ -155,32 +154,44 @@ static int closeTearDown(diskFileObject **thisPointer)
 }
 
 /*
- * diskFileWrite returns 0 on error and 1 on success. It writes the data in dataContainer to the file on the disk associated with the diskFile object. 
+ * diskFileWrite returns 0 on error, otherwise number of bytes written
  */
-static int diskFileWrite(diskFileObject *this, dataContainerObject *dataContainer) 
+static int diskFileWrite(diskFileObject *this, dataContainerObject *dataContainer, uint32_t fpOffset) 
 {  
+  FILE     *descriptor = NULL;
+  uint32_t bytesToWrite; 
+  
   if(this == NULL || dataContainer == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
+  
+  if(dataContainer->bytesize == 0){
+    printf("Error: Cannot write 0 bytes to file\n");
+    return 0; 
+  }
+  
+  bytesToWrite = dataContainer->bytesize; 
   
   if( fileModeWritable(this->mode) != 1 ){
     printf("Error: File mode isn't writable (or it's NULL)\n"); 
     return 0; 
   }
   
-  if(!this->descriptor){
+  if(this->descriptor == NULL){
     printf("Error: File is not open");
     return 0;
   }
   
+  //we don't want to change the original file pointer
+  descriptor = this->descriptor + fpOffset; 
 
-  if( fwrite( (const void*)dataContainer->data, dataContainer->bytesize, COUNT, this->descriptor) != COUNT ){
+  if( fwrite( (const void*)dataContainer->data, bytesToWrite, COUNT, descriptor) != COUNT ){
     printf("Error: didn't write all data to file\n");
     return 0; 
   }
   
-  return 1; 
+  return bytesToWrite; 
 }
 
 
@@ -189,9 +200,11 @@ static int diskFileWrite(diskFileObject *this, dataContainerObject *dataContaine
  */
 static dataContainerObject *diskFileRead(diskFileObject *this)
 {
-  dataContainerObject *dataContainer; 
-  long int            fileBytesize;
-
+  dataContainerObject *dataContainer = NULL; 
+  FILE                *descriptor    = NULL; 
+  long int            fileBytesize   = 0;
+  
+  
   if( this == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
     return NULL; 
@@ -202,7 +215,7 @@ static dataContainerObject *diskFileRead(diskFileObject *this)
     return NULL; 
   }
     
-  if(!this->descriptor){
+  if(this->descriptor == NULL){
     printf("Error: File is not open\n");
     return NULL;
   }
@@ -221,7 +234,7 @@ static dataContainerObject *diskFileRead(diskFileObject *this)
 
   
   //TODO look into error checking more TODO don't read in a single operation
-  if( fread(dataContainer->data, fileBytesize, COUNT, this->descriptor) != COUNT){
+  if( fread(dataContainer->data, fileBytesize, COUNT, descriptor) != COUNT){
     printf("Error: Failed to read file into data container\n");
     secureFree( &dataContainer->data, dataContainer->bytesize );
     secureFree( &dataContainer, sizeof(*dataContainer)); 
@@ -244,8 +257,8 @@ static dataContainerObject *diskFileRead(diskFileObject *this)
  */
 int initializePathProperties(diskFileObject *this, char *path, char *name)
 {
-  size_t  pathBytesize;
-  size_t  nameBytesize;
+  size_t  pathBytesize = 0;
+  size_t  nameBytesize = 0;
   
   if(this == NULL || path == NULL || name == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");

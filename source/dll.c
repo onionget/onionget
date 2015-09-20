@@ -9,14 +9,14 @@
 
 
 //public methods
-static int                   insert(dllObject *this, int end, char *id, size_t idBytesize, dataContainerObject *dataContainer);
-static dataContainerObject   *getId(dllObject *this, char *id, uint32_t idBytesize);
+static int       insert(dllObject *this, int end, char *id, void *memberPointer);
+
 
 //private methods
 static int       insertInitial(dllObject *this, dllMember *member);
 static int       insertHead(dllObject *this, dllMember *member);
 static int       insertTail(dllObject *this, dllMember *member);
-static dllMember *newDllMember(dataContainerObject *dataContainer, char *id, size_t idBytesize);
+static dllMember *newDllMember(void *memberPointer);
 
 /************ OBJECT CONSTRUCTOR ******************/
 
@@ -36,7 +36,7 @@ dllObject* newDll(void)
   this->head     = NULL; 
   this->tail     = NULL;
   
-  this->memberCount = 0; 
+  this->count = 0; 
   
   this->insert  = &insert;
   this->getId   = &getId;
@@ -47,33 +47,13 @@ dllObject* newDll(void)
 
 /************ PUBLIC METHODS ******************/
 
-/*
- *  getId returns NULL if an error occurs or the item identified by id is not found in the list. On success it returns a pointer to to requested dataContainer.
- */
-static dataContainerObject *getId(dllObject *this, char *id, uint32_t idBytesize)
-{
-  dllMember *currentMember;
-  
-  if(this == NULL || id == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
-    return NULL; 
-  }
-  
-  for(currentMember = this->head; currentMember != NULL; currentMember = currentMember->next){
-    if( !memcmp(currentMember->identifier, id, idBytesize) ){
-      return currentMember->dataContainer;
-    }
-  }
-   
-  return NULL; 
-}
 
 /*
  * insert returns 0 on error and 1 on success. It inserts to the linked list dataContainer object dataContainer
  * identified by id id, which is idBytesize bytes. Items may be inserted at end DLL_HEAD or DLL_TAIL, for the
  * start or end of the list, respectively. 
  */
-static int insert(dllObject *this, int end, char *id, size_t idBytesize, dataContainerObject *dataContainer)
+static int insert(dllObject *this, int end, char *id, void *memberPointer)
 {
   dllMember  *member;
   int        insertSuccess;
@@ -90,7 +70,7 @@ static int insert(dllObject *this, int end, char *id, size_t idBytesize, dataCon
   }
   
   //sanity checks passed so allocate a new member
-  member = newDllMember(dataContainer, id, idBytesize);
+  member = newDllMember(memberPointer);
   if(member == NULL){
     printf("Error: Failed to create dll member\n");
     return 0;
@@ -105,14 +85,13 @@ static int insert(dllObject *this, int end, char *id, size_t idBytesize, dataCon
   else if ( end        == DLL_TAIL )  insertSuccess = insertTail    ( this , member ); 
   
   if(!insertSuccess){
-    secureFree(&(member->identifier), member->identifierBytesize);
     secureFree(&member, sizeof(*member)); 
     printf("Error: Failed to insert member into list\n");
     return 0; 
   }
   
   //keep track of the total bytesize of the linked list
-  this->memberCount += 1;
+  this->count += 1;
   
   return 1; 
 }
@@ -123,14 +102,9 @@ static int insert(dllObject *this, int end, char *id, size_t idBytesize, dataCon
 /*
  * newDllObject returns NULL on error, or a pointer to a new dllObject on success. 
  */
-static dllMember *newDllMember(dataContainerObject *dataContainer, char *id, size_t idBytesize)
+static dllMember *newDllMember(void *memberPointer)
 { 
-  dllMember  *member;
-  
-  if(dataContainer == NULL || id == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
-    return NULL;
-  }
+  dllMember *Member;
   
   //allocate the dllObject 
   member = (dllMember *)secureAllocate(sizeof(*member));
@@ -139,21 +113,8 @@ static dllMember *newDllMember(dataContainerObject *dataContainer, char *id, siz
     return NULL;
   }
   
-  //member is identified by identifier id, which is idBytesize bytes
-  member->identifier = (char *)secureAllocate(idBytesize);
-  if(member->identifier == NULL){
-    printf("Error: Failed to allocate memory for linked list member identified\n");
-    secureFree(&member, sizeof(*member));
-    return NULL; 
-  }
-  
-  member->identifierBytesize = idBytesize; 
-  
-  //write the id into the member identifier field
-  memcpy(member->identifier, id, idBytesize); 
-  
-  //add the dataContainer to the dllObject
-  member->dataContainer = dataContainer; 
+  member->memberPointer = memberPointer; 
+  member->locked        = 0; 
   
   return member;
 }

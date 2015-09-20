@@ -179,6 +179,12 @@ static void *processConnection(void *connectionV)
   for(filenameBytesize = 0; totalBytesize > 0; totalBytesize -= filenameBytesize + sizeof(uint32_t)){ 
     filenameBytesize = sendNextRequestedFile(connection);
     
+    //should we check for this?
+    if(totalBytesize - filenameBytesize < 0){
+      printf("Error: Client sent more bytes than it said it was going to\n");
+      goto cleanup; 
+    }
+    
     if(filenameBytesize == -1){
       printf("Error: Failed to send file to client\n");
       goto cleanup;  
