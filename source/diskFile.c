@@ -111,7 +111,12 @@ static long getBytesize(diskFileObject *this)
     printf("Error: Failed to get file bytesize\n");
     return -1; 
   }
-    
+  
+  if( fseek(descriptor, 0, 0) == -1 ){
+    printf("Error: Failed to seek to start of file\n");
+    return -1; 
+  }
+  
   return fileBytesize; 
 }
 
@@ -159,7 +164,7 @@ static int closeTearDown(diskFileObject **thisPointer)
 static int diskFileWrite(diskFileObject *this, dataContainerObject *dataContainer, uint32_t fpOffset) 
 {  
   FILE     *descriptor = NULL;
-  uint32_t bytesToWrite; 
+  uint32_t bytesWritten; 
   
   if(this == NULL || dataContainer == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
@@ -170,8 +175,6 @@ static int diskFileWrite(diskFileObject *this, dataContainerObject *dataContaine
     printf("Error: Cannot write 0 bytes to file\n");
     return 0; 
   }
-  
-  bytesToWrite = dataContainer->bytesize; 
   
   if( fileModeWritable(this->mode) != 1 ){
     printf("Error: File mode isn't writable (or it's NULL)\n"); 
@@ -186,12 +189,12 @@ static int diskFileWrite(diskFileObject *this, dataContainerObject *dataContaine
   //we don't want to change the original file pointer
   descriptor = this->descriptor + fpOffset; 
 
-  if( fwrite( (const void*)dataContainer->data, bytesToWrite, COUNT, descriptor) != COUNT ){
+  if( fwrite( (const void*)dataContainer->data, dataContainer->bytesize, COUNT, descriptor) != COUNT ){
     printf("Error: didn't write all data to file\n");
     return 0; 
   }
   
-  return bytesToWrite; 
+  return dataContainer->bytesize; 
 }
 
 
