@@ -12,6 +12,7 @@
 //client input format :  [./onionGet] [client] [tor bind address] [tor listen port]  [onion address]       [onion port]                    [operation] [save path] [filenames...] 
 //server input format :  [./onionGet] [server] [server address]   [server port]      [shared folder path]  [memory cache megabyte size] 
 
+/*
 static int initializeClient(int argc, char *argv[]);
 static int clientOperationValid(char* operation);
 static int clientSanityCheck(char *onionPort, char *onionAddress, char *operation);
@@ -19,12 +20,13 @@ static int showHelpExit(void);
 static int serverSanityCheck(int argc, char *bindAddress, char *listenPort);
 static int initializeServer(int argc, char *argv[]);
 static int systemSanityCheck(); 
-
+*/
 
 //TODO refactor this to take into account some functions never return, and clean up in general where showhelpexit is and how it works etc
 
 int main(int argc, char *argv[])
 {
+  /*
   int successIndicated = 0; 
   
   if(!systemSanityCheck()){ 
@@ -43,10 +45,12 @@ int main(int argc, char *argv[])
   }
   
   printf("Operation Completed\n"); //note that server blocks and will never get here on success
+  */
   return 0;
 }
 
 
+/*
 //NOTE: Because we mmap files for reading and writing, and need to use offsets, and mmap offsets need to be multiples of
 //the system page size, currently only supporting standard page sizes (all popular architectures normal page sizes supported
 //and several possible huge page sizes supported as well), TODO add support for arbitrary page sizes, relevant files are 
@@ -64,10 +68,12 @@ static int systemSanityCheck()
   
   return 1;
 }
+*/
 
 
 /**** CLIENT FUNCTIONS ***/
 
+/*
 //returns 0 on error
 static int initializeClient(int argc, char *argv[])
 {
@@ -96,58 +102,14 @@ static int initializeClient(int argc, char *argv[])
   printf("Client operation success\n");
   return 1;
 }
+*/
 
 
-//returns 0 if invalid or NULL (which is invalid in addition to being an error), or 1 if valid
-static int clientOperationValid(char *operation)
-{
-  char *validOperations[C_VALID_OPERATION_COUNT] = {"--get",}; 
-  int testedOperations;
- 
-  if(operation == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
-    return 0;
-  }
-  
-  for(testedOperations = 0; testedOperations != C_VALID_OPERATION_COUNT ; testedOperations++){
-    if(!strcmp(validOperations[testedOperations], operation)){
-      return 1;
-    }
-  }
-  
-  return 0; 
-}
-
-
-//returns 0 on error
-static int clientSanityCheck(char *onionPort, char *onionAddress, char *operation)
-{  
-  if( onionPort == NULL || onionAddress == NULL || operation == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
-    return 0;
-  }
-
-  if( !clientOperationValid(operation) ){
-    printf("Error: Operation %s is invalid for client", operation);
-    return 0;
-  }
-  
-  if( strlen(onionPort) > 5 || strtol(onionPort, NULL, 10) > 65535){
-   printf("Error: Port of destination must be at or below 65535\n");
-   return 0; 
-  }
-  
-  
-  if( strlen(onionAddress) != ONION_ADDRESS_BYTESIZE ){
-   printf("Error: put onion address in form abcdefghijklmnop.onion\n");
-   return 0; 
-  }
-  
-  return 1; 
-}
 
 
 /*** SERVER FUNCTIONS ****/ 
+
+/*
 
 //TODO check int types not using uint64_t anymore 
 static int initializeServer(int argc, char *argv[])
@@ -207,9 +169,10 @@ static int serverSanityCheck(int argc, char *bindAddress, char *listenPort)
   
   return 1;
 }
-
+*/
 
 /**** GENERAL FUNCTIONS *****/
+/*
 static int showHelpExit()
 {
   printf("\n ------ SYNTAX ------ \n\n");
@@ -218,3 +181,4 @@ static int showHelpExit()
   printf("Server Syntax: [./onionGet] [\"server\"] [bind address] [listen port] [shared folder path] [memory cache megabytes (max 4294)]\n\n");
   exit(1); 
 }
+*/

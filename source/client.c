@@ -11,120 +11,161 @@
 #include "client.h"
 #include "ogEnums.h" 
 
+
+
+//private internal values 
+typedef struct clientPrivate{
+  clientObject   publicClient;
+  routerObject  *router;
+}clientPrivate;
+
+
+
 //PUBLIC METHODS
-static int        executeOperation(clientObject *this);
-static int        getFiles(clientObject *this);
+static int   getFiles(clientObject *this, char *dirPath, char **fileNames, uint32_t fileCount);
+static int   initializeSocks(clientObject *this, char *torBindAddress, char *torPort);
+static int   establishConnection(clientObject *this, char *onionAddress, char *onionPort);
+static int   setRouter(clientObject *client, routerObject *router);   
+
 
 //PRIVATE METHODS
-static int        establishConnection(clientObject *this);
-static uint32_t   calculateTotalRequestBytesize(clientObject *this);
-static int        sendRequestedFilenames(clientObject *this);
-static int        getIncomingFile(clientObject *this, diskFileObject *diskFile);
+static uint32_t  calculateTotalRequestBytesize(char **fileNames, uint32_t fileCount);
+static int       sendRequestedFilenames(clientObject *this, char **fileNames, uint32_t fileCount);
+static int       getIncomingFile(clientObject *this, diskFileObject *diskFile);
+static int       hsValueSanityCheck(char *onionAddress, char *onionPort);
 
 
 
 /************ OBJECT CONSTRUCTOR ******************/
 
 /*    
- * newClient returns a client object on success and NULL on failure, the client object is already connected to onionAddress on onionPort, and the file request string
- * is already constructed.  
+ * newClient returns a client object on success and NULL on failure
  * 
  */
-clientObject *newClient(char *torBindAddress, char *torPort, char *onionAddress, char *onionPort, char *operation, char *dirPath, char **fileNames, uint32_t fileCount)
+clientObject *newClient(void)
 {
-  clientObject *this; 
+  clientPrivate *privateThis = NULL;
   
-  if(torBindAddress == NULL || torPort == NULL || onionAddress == NULL || onionPort == NULL || operation == NULL || dirPath == NULL || *fileNames == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
-    return NULL; 
-  }
-
-  //allocate memory for the client object
-  this = (clientObject *)secureAllocate(sizeof(*this));
-  if(this == NULL){
-   printf("Error: Failed to instantiate a client\n");
-   return NULL; 
-  }
- 
-  //initialize the client properties
-  this->router = newRouter();
-  if(this->router == NULL){
-    printf("Error: Failed to create router for client, client instantiation failed\n");
+  //Allocate memory for the object
+  privateThis = (clientPrivate *)secureAllocate(sizeof(*privateThis)); 
+  if(privateThis == NULL){
+    printf("Error: Failed to allocate new client object\n");
     return NULL; 
   }
   
-  this->torBindAddress   = torBindAddress;
-  this->torPort          = torPort;
-  this->onionAddress     = onionAddress;
-  this->onionPort        = onionPort;
-  this->operation        = operation;
-  this->dirPath          = dirPath;  
-  this->fileNames        = fileNames; 
-  this->fileCount        = fileCount; 
+  //initialize public methods
+  privateThis->publicClient.getFiles            = &getFiles; 
+  privateThis->publicClient.establishConnection = &establishConnection; 
+  privateThis->publicClient.initializeSocks     = &initializeSocks; 
+  privateThis->publicClient.setRouter           = &setRouter; 
   
-  
-  //initialize the client public methods
-  this->getFiles         = &getFiles;
-  this->executeOperation = &executeOperation;
+  //initialize private properties
+  privateThis->router = NULL;
 
-      
-  //connect client to the hidden service
-  if( !establishConnection(this) ){
-    printf("Error: Failed to instantiate a client\n");
-    return NULL; 
-  }
-  
 
-  return this; 
+  return (clientObject*)privateThis; 
 }
-
-
 
 
 
 /************ PUBLIC METHODS ******************/
 
 
-/*
- * executeOperation returns 0 on error and 1 on success, this decides what to do based on the operation property of the client object
- * right now the only possible operation is --get which gets files from the server
- */
-static int executeOperation(clientObject *this)
+//returns 0 on error and 1 on success (dependency injection) 
+static int setRouter(clientObject *this, routerObject *router)
 {
-  if( this == NULL ){
-    printf("Error: Something was NULL that shouldn't have been\n");
+  clientPrivate *private = NULL;
+  
+  private = (clientPrivate *)this;
+  
+  if(private == NULL || this == NULL || router == NULL){
+    printf("Error: Failed to set the clients router\n");
     return 0; 
   }
   
-  //carry out the operation, if the operation isn't valid return 0 because it's an error (this is redundantly checked, also in controller.c) 
-  if  (   !strcmp(this->operation, "--get")  ) return this->getFiles(this);
-  else                                         return 0;  
+  private->router = router;
+  
+  return 1; 
+}
+
+
+//TODO sanity check these values
+static int initializeSocks(clientObject *this, char *torBindAddress, char *torPort)
+{
+  clientPrivate *private = NULL;
+  
+  private = (clientPrivate *)this;
+  
+  if(this == NULL || private == NULL || private->router == NULL || torBindAddress == NULL || torPort == NULL){
+    printf("Error: something was NULL that shouldn't have been\n");
+    return 0; 
+  }
+  
+  //connect the client objects router to Tor 
+  if(!private->router->ipv4Connect(private->router, torBindAddress, torPort)){
+    printf("Error: Failed to connect client\n");
+    return 0;
+  }
+  
+  return 1; 
 }
 
 
 /*
- * getFiles returns 0 on error and 1 on success, it sends the server the file request string, then goes through each file name 
- * and writes it to the disk with the data received from the server for that file name
+ * establishConnection returns 0 on error and 1 on success
  */
-static int getFiles(clientObject *this)
+static int establishConnection(clientObject *this, char *onionAddress, char *onionPort)
 {
-  int            currentFile;
-  uint32_t       fileCount; 
-  diskFileObject *diskFile; 
+  clientPrivate *private = NULL;
   
-  if( this == NULL ){
+  private = (clientPrivate *)this; 
+  
+  //sanity checking
+  if(private == NULL || private->router == NULL || this == NULL || onionAddress == NULL || onionPort == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n"); 
+    return 0;
+  }
+  
+  if( !hsValueSanityCheck(onionAddress, onionPort) ){
+    printf("Error: Invalid onion destination\n");
+    return 0; 
+  }
+     
+  //tell Tor to connect to the onion_address:port
+  if( !private->router->socks5Connect(private->router, onionAddress, ONION_ADDRESS_BYTESIZE, (uint16_t)strtol(onionPort, NULL, 10)) ){
+    printf("Error: Failed to connect to destination address\n");
+    return 0;
+  }
+  
+  return 1; 
+}
+
+
+
+
+
+/*
+ * getFiles returns 0 on error and 1 on success, it sends the server the file request string, then goes through each file name 
+ * and writes it to the disk with the data received from the server for that file name TODO dependency inject diskFile? TODO sanity check dirpath 
+ */
+static int getFiles(clientObject *this, char *dirPath, char **fileNames, uint32_t fileCount)
+{
+  int            currentFile = 0;
+  diskFileObject *diskFile   = NULL; 
+  
+  if( this == NULL || dirPath == NULL || fileNames == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
   
-  //send the server the request string
-  if( !sendRequestedFilenames(this) ){
+  //send the server the requested file names
+  if( !sendRequestedFilenames(this, fileNames, fileCount) ){
     printf("Error: Failed to send server request string\n");
     return 0;
   }
     
   //get the files from the server
-  for(fileCount = this->fileCount, currentFile = 0; fileCount--; currentFile++){ 
+  for(currentFile = 0; fileCount--; currentFile++){ 
     
     //first we open a new diskFile to write the file to
     diskFile = newDiskFile();
@@ -133,7 +174,7 @@ static int getFiles(clientObject *this)
       return 0;
     }
     
-    if( !diskFile->dfOpen(diskFile, this->dirPath, this->fileNames[currentFile], "w") ){
+    if( !diskFile->dfOpen(diskFile, dirPath, fileNames[currentFile], "w") ){
       printf("Error: Failed to open file on disk\n");
       return 0; 
     }
@@ -152,7 +193,7 @@ static int getFiles(clientObject *this)
  
   }
   
-  //helps ensure that files are written to the disk (NOTE: sync after each individual file, or after all files like currently?)
+  //helps ensure that files are written to the disk (TODO: sync after each individual file, or after all files like currently, or in fileDisk, ????)
   sync(); 
   
   return 1; 
@@ -175,13 +216,16 @@ static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
   uint32_t            bytesWritten         = 0; 
   uint32_t            writeOffset          = FILE_START; 
   
-  if(this == NULL || diskFile == NULL){
+  clientPrivate *private = NULL;
+  private = (clientPrivate *)this; 
+  
+  if(private == NULL || private->router == NULL || this == NULL || diskFile == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0; 
   }
   
   //the server sends us the incoming file's bytesize
-  incomingFileBytesize = this->router->getIncomingBytesize(this->router); 
+  incomingFileBytesize = private->router->getIncomingBytesize(private->router); 
   if(!incomingFileBytesize){
     printf("Error: Failed to get incoming file bytesize, aborting\n");
     return 0;
@@ -195,7 +239,7 @@ static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
     bytesToGet = (incomingFileBytesize <= FILE_CHUNK_BYTESIZE) ? incomingFileBytesize : FILE_CHUNK_BYTESIZE; 
         
     //get up to FILE_CHUNK_BYTESIZE bytes of the file
-    incomingFileChunk = this->router->receive(this->router, bytesToGet);
+    incomingFileChunk = private->router->receive(private->router, bytesToGet);
     if(incomingFileChunk == NULL){
       printf("Error: Failed to receive data, aborting\n");
       return 0; 
@@ -223,42 +267,43 @@ static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
 
 
 /*
- * sendRequestedFilenames returns 0 on error and 1 on success, it sends the already initialized file request string to the server
+ * sendRequestedFilenames returns 0 on error and 1 on success
+ * 
+ * [request string bytesize][first filename bytesize][first file name][second filename bytesize][second file name]
  */
-
-
-//[request string bytesize][first filename bytesize][first file name][second filename bytesize][second file name]
-
-static int sendRequestedFilenames(clientObject *this)
+static int sendRequestedFilenames(clientObject *this, char **fileNames, uint32_t fileCount)
 {
-  uint32_t fileRequestStringBytesize;
-  uint32_t currentFile;
+  uint32_t      fileRequestStringBytesize = 0;
+  uint32_t      currentFile               = 0;
+  clientPrivate *private                  = NULL;
   
-  if( this == NULL ){
+  private = (clientPrivate *)this;
+  
+  if( private == NULL || private->router == NULL || this == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
   
-  fileRequestStringBytesize = calculateTotalRequestBytesize(this);
+  fileRequestStringBytesize = calculateTotalRequestBytesize(fileNames, fileCount);
   if(fileRequestStringBytesize == -1){
     printf("Error: failed to calculate file request string bytesize\n");
     return 0; 
   }
   
   //let the server know the bytesize of the request string
-  if( !this->router->transmitBytesize(this->router, fileRequestStringBytesize) ){
+  if( !private->router->transmitBytesize(private->router, fileRequestStringBytesize) ){
     printf("Error: Failed to transmit request string\n");
     return 0;
   }
   
   //send the server the requested file file file names TODO clean this up (ie: don't take strlen twice)  
-  for(currentFile = 0; currentFile != this->fileCount; currentFile++){
-    if(!this->router->transmitBytesize(this->router, strlen(this->fileNames[currentFile])) ){
+  for(currentFile = 0; currentFile != fileCount; currentFile++){
+    if(!private->router->transmitBytesize(private->router, strlen(fileNames[currentFile])) ){
       printf("Error: Failed to send server file name bytesize\n");
       return 0; 
     }
     
-    if(!this->router->transmit(this->router, this->fileNames[currentFile], strlen(this->fileNames[currentFile])) ){
+    if(!private->router->transmit(private->router, fileNames[currentFile], strlen(fileNames[currentFile])) ){
       printf("Error: Failed to send server file name"); 
       return 0; 
     } 
@@ -270,22 +315,22 @@ static int sendRequestedFilenames(clientObject *this)
 
 
 /*
- * calculateTotalRequestBytesize returns -1 on error and the bytesize of the file request string on success
+ * calculateTotalRequestBytesize returns 0 on error and the bytesize of the file request string on success //TODO set errno or something?
  */
-static uint32_t calculateTotalRequestBytesize(clientObject *this)
+static uint32_t calculateTotalRequestBytesize(char **fileNames, uint32_t fileCount)
 {
-  uint32_t fileRequestStringBytesize; 
-  uint32_t currentFile;
-  uint32_t fileCount;
+  uint32_t fileRequestStringBytesize = 0; 
+  uint32_t currentFile               = 0;
+
   
-  if(this == NULL){
+  if(*fileNames == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
-    return -1; 
+    return 0; 
   }
   
   //get bytesize of each requested file name and add it to the file request strings total bytesize + 1 byte each for the delimiter
-  for( fileCount = this->fileCount, currentFile = 0, fileRequestStringBytesize = 0 ; fileCount-- ; currentFile++ ){
-    fileRequestStringBytesize += sizeof(uint32_t) + strlen(this->fileNames[currentFile]);
+  for(currentFile = 0, fileRequestStringBytesize = 0 ; fileCount-- ; currentFile++ ){
+    fileRequestStringBytesize += sizeof(uint32_t) + strlen(fileNames[currentFile]);
   }
   
   //return the fileRequestStringBytesize
@@ -293,29 +338,26 @@ static uint32_t calculateTotalRequestBytesize(clientObject *this)
 }
 
 
- 
 
-/*
- * establishConnection returns 0 on error and 1 on success, it connects the client object to the server 
- */
-static int establishConnection(clientObject *this)
-{
-  if(this == NULL){
-    printf("Error: Something was NULL that shouldn't have been"); 
+static int hsValueSanityCheck(char *onionAddress, char *onionPort)
+{  
+  if( onionPort == NULL || onionAddress == NULL){
+    printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
-  
-  //connect the client objects router to Tor //TODO consider moving this to networking functions 
-  if(!this->router->ipv4Connect(this->router, this->torBindAddress, this->torPort)){
-    printf("Error: Failed to connect client\n");
-    return 0;
+
+  if( strlen(onionPort) > 5 || strtol(onionPort, NULL, 10) > 65535){
+   printf("Error: Port of destination must be at or below 65535\n");
+   return 0; 
   }
   
-  //tell Tor to connect to the onion_address:port
-  if( !this->router->socks5Connect(this->router, this->onionAddress, ONION_ADDRESS_BYTESIZE, (uint16_t)strtol(this->onionPort, NULL, 10)) ){
-    printf("Error: Failed to connect to destination address\n");
-    return 0;
+  if( strlen(onionAddress) != ONION_ADDRESS_BYTESIZE ){
+   printf("Error: put onion address in form abcdefghijklmnop.onion\n");
+   return 0; 
   }
   
   return 1; 
 }
+
+ 
+

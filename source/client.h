@@ -5,21 +5,13 @@
 #include "dataContainer.h"
 
 
-typedef struct clientObject{
-  routerObject  *router;
-  char          *torBindAddress;
-  char          *torPort;
-  char          *onionAddress;
-  char          *onionPort;
-  char          *dirPath; 
-  char          *operation; 
-  uint32_t      dirPathBytesize; 
-  uint32_t      fileCount;
-  char          **fileNames; 
-  
-  int          (*executeOperation)(struct clientObject *this); 
-  int           (*getFiles)(struct clientObject *this);   
+typedef struct clientObject{  
+  int          (*getFiles)(struct clientObject *this, char *dirPath, char **fileNames, uint32_t fileCount);   
+  int          (*establishConnection)(struct clientObject *this, char *onionAddress, char *onionPort);
+  int          (*setRouter)(struct clientObject *client, routerObject *router);  
+  int          (*initializeSocks)(struct clientObject *client, char *torBindAddress, char *torPort);
 }clientObject; 
 
-clientObject* newClient(char *torBindAddress, char *torPort, char *onionAddress, char *onionPort, char *operation, char *dirPath, char **fileNames, uint32_t fileCount);
+
+clientObject *newClient(void);
 
