@@ -4,8 +4,6 @@
 
 
 typedef struct routerObject{
-  int socket;
-  
   int (*socks5Connect)(struct routerObject *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort);
   dataContainerObject *(*receive)(struct routerObject *this, uint32_t payloadBytesize);
   int (*transmit)(struct routerObject *this, void *payload, uint32_t payloadBytesize);

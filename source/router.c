@@ -22,6 +22,11 @@
 #include "memoryManager.h"
 #include "ogEnums.h"
 
+//private internal values 
+typedef struct routerPrivate{
+  routerObject   publicRouter;
+  int            socket; 
+}routerPrivate;
 
 
 //public methods
@@ -37,10 +42,10 @@ static int                  ipv4Listen          ( routerObject *this            
 static int                  getConnection       ( routerObject *this                                                                                           );
 
 //private methods
-static int socksResponseValidate          ( routerObject *this                                                                                           );
-static int sendSocks5ConnectRequest       ( routerObject *this            , char *destAddress          , uint8_t destAddressBytesize , uint16_t destPort );
-static int initializeSocks5Protocol       ( routerObject *this                                                                                           );
-static int setSocketRecvTimeout           ( routerObject *this            , int timeoutSecs            , int timeoutUsecs                                );
+static int socksResponseValidate          ( routerObject  *this                                                                                                  );
+static int sendSocks5ConnectRequest       ( routerObject  *this                   , char *destAddress          , uint8_t destAddressBytesize , uint16_t destPort );
+static int initializeSocks5Protocol       ( routerObject  *this                                                                                                  );
+static int setSocketRecvTimeout           ( routerObject  *this                   , int timeoutSecs            , int timeoutUsecs                                );
 
 
 
@@ -54,30 +59,34 @@ static int setSocketRecvTimeout           ( routerObject *this            , int 
  */
 routerObject *newRouter(void)
 {
-  //allocate memory for the router object
-  routerObject *this = (routerObject *)secureAllocate(sizeof(*this));
-  if(this == NULL){
+  routerPrivate *privateThis = NULL;
+  
+  //allocate memory for the object
+  privateThis = (routerPrivate *) secureAllocate(sizeof(*privateThis)); 
+  if(privateThis == NULL){
     printf("Error: Failed to allocate memory for router object\n");
     return NULL;  
   }
   
-  //object properties
-  this->socket   = -1; 
  
-  //object public methods
-  this->transmit              = &transmit;
-  this->transmitBytesize      = &transmitBytesize;
-  this->receive               = &receive;
-  this->socks5Connect         = &socks5Connect;
-  this->getIncomingBytesize   = &getIncomingBytesize;
-  this->ipv4Connect           = &ipv4Connect; 
-  this->ipv4Listen            = &ipv4Listen;
-  this->getConnection         = &getConnection;
-  this->setSocket             = &setSocket; 
-  this->destroyRouter         = &destroyRouter;
+  //initialize public methods
+  privateThis->publicRouter.transmit              = &transmit;
+  privateThis->publicRouter.transmitBytesize      = &transmitBytesize;
+  privateThis->publicRouter.receive               = &receive;
+  privateThis->publicRouter.socks5Connect         = &socks5Connect;
+  privateThis->publicRouter.getIncomingBytesize   = &getIncomingBytesize;
+  privateThis->publicRouter.ipv4Connect           = &ipv4Connect; 
+  privateThis->publicRouter.ipv4Listen            = &ipv4Listen;
+  privateThis->publicRouter.getConnection         = &getConnection;
+  privateThis->publicRouter.setSocket             = &setSocket; 
+  privateThis->publicRouter.destroyRouter         = &destroyRouter;
+  
+  
+  //initialize private properties
+  privateThis->socket   = -1; 
   
  
-  return this; 
+  return (routerObject *) privateThis; 
 }
 
 
@@ -87,25 +96,27 @@ routerObject *newRouter(void)
 
 
 /*
- * destroyRouter returns 0 on error and 1 on success. It frees the memory associated with the router object. 
+ * destroyRouter returns 0 on error and 1 on success. It closes the socket (if open) and frees the memory associated with the router object. 
  */
 static int destroyRouter(routerObject **thisPointer)
 {
-  routerObject *this;
- 
-  this = *thisPointer;
+  routerPrivate **privateThisPointer = NULL;
+  routerPrivate *privateThis         = NULL;
   
-  if(this == NULL){
+  privateThisPointer = (routerPrivate **)thisPointer;
+  privateThis        = *privateThisPointer; 
+    
+  if(privateThis == NULL){
     printf("Error: Something was NULL that shouldn't have been");
     return 0;
   }
   
-  if( close(this->socket) != 0 ){
+  if( privateThis->socket != -1 && close(privateThis->socket) != 0 ){
     printf("Error: Failed to close socket\n");
     return 0; 
   }
   
-  secureFree(thisPointer, sizeof(**thisPointer)); 
+  secureFree(privateThisPointer, sizeof(routerPrivate)); 
   return 1; 
 }
 
@@ -115,17 +126,21 @@ static int destroyRouter(routerObject **thisPointer)
  */
 static dataContainerObject *receive(routerObject *this, uint32_t payloadBytesize)
 {
-  dataContainerObject   *receivedMessage;
-  size_t                bytesReceived;
-  size_t                recvReturn;
+  routerPrivate         *private         = NULL;
+  dataContainerObject   *receivedMessage = NULL;
+  size_t                bytesReceived    = 0;
+  size_t                recvReturn       = 0;
+  
+  
+  private = (routerPrivate *)this; 
   
   //basic sanity checks
-  if(this == NULL){
+  if(private == NULL || this == NULL){ //this is never NULL if private is but keeping it like it is for now for readability
     printf("Error: Something was NULL that shouldn't have been");
     return NULL; 
   }
   
-  if(this->socket == -1){
+  if(private->socket == -1){
     printf("Error: This router hasn't a valid socket associated with it\n");
     return NULL; 
   }
@@ -138,7 +153,7 @@ static dataContainerObject *receive(routerObject *this, uint32_t payloadBytesize
   }
     
   for(bytesReceived = 0, recvReturn = 0; bytesReceived != payloadBytesize; bytesReceived += recvReturn){
-    recvReturn = recv(this->socket, &(receivedMessage->data[bytesReceived]), payloadBytesize - bytesReceived, 0);     
+    recvReturn = recv(private->socket, &(receivedMessage->data[bytesReceived]), payloadBytesize - bytesReceived, 0);     
     if(recvReturn == -1 || recvReturn == 0){ 
       secureFree(&receivedMessage->data, payloadBytesize);
       secureFree(receivedMessage, sizeof(*receivedMessage)); 
@@ -158,8 +173,8 @@ static dataContainerObject *receive(routerObject *this, uint32_t payloadBytesize
  */
 static uint32_t getIncomingBytesize(routerObject *this)
 {
-  uint32_t            incomingBytesize;
-  dataContainerObject *incomingBytesizeContainer;
+  uint32_t            incomingBytesize           = 0;
+  dataContainerObject *incomingBytesizeContainer = NULL; 
   
   //basic sanity check
   if(this == NULL){
@@ -192,22 +207,25 @@ static uint32_t getIncomingBytesize(routerObject *this)
  */
 static int transmit(routerObject *this, void *payload, uint32_t payloadBytesize)
 {
-  size_t sentBytes;  
-  size_t sendReturn;
+  size_t        sentBytes    = 0;  
+  size_t        sendReturn   = 0;
+  routerPrivate *private     = NULL; 
+  
+  private = (routerPrivate *)this; 
   
   //basic sanity checking
-  if(this == NULL || payload == NULL){
+  if(private == NULL || payload == NULL || this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
   
-  if(this->socket == -1){
+  if(private->socket == -1){
     printf("Error: Router hasn't a socket set\n");
     return 0;
   }
   
   for(sentBytes = 0, sendReturn = 0; sentBytes != payloadBytesize; sentBytes += sendReturn){
-    sendReturn = send(this->socket, payload, payloadBytesize - sentBytes, 0); //TODO note not currently keeping track of payload position because it is void, think of a way around this
+    sendReturn = send(private->socket, payload, payloadBytesize - sentBytes, 0); //TODO note not currently keeping track of payload position because it is void, think of a way around this
     if(sendReturn == -1){
       printf("Error: Failed to send bytes\n");
       return 0;
@@ -223,15 +241,18 @@ static int transmit(routerObject *this, void *payload, uint32_t payloadBytesize)
  */
 static int transmitBytesize(routerObject *this, uint32_t bytesize)
 {
-  uint32_t bytesizeEncoded;
+  uint32_t       bytesizeEncoded = 0;
+  routerPrivate  *private        = NULL; 
+  
+  private = (routerPrivate *)this; 
   
   //basic sanity checking
-  if(this == NULL){
+  if(private == NULL || this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
   
-  if(this->socket == -1){
+  if(private->socket == -1){
     printf("Error: Router hasn't a socket set\n");
     return 0; 
   }
@@ -256,12 +277,17 @@ static int transmitBytesize(routerObject *this, uint32_t bytesize)
  */
 static int socks5Connect(routerObject *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort)
 {  
-  if(this == NULL || destAddress == NULL){
+  
+  routerPrivate *private = NULL; 
+  
+  private = (routerPrivate *)this; 
+  
+  if(private == NULL || destAddress == NULL || this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
   
-  if( this->socket == -1 ){
+  if( private->socket == -1 ){
     printf("Error: No socket established for router\n");
     return 0; 
   }
@@ -295,12 +321,16 @@ static int ipv4Connect(routerObject *this, char *ipv4Address, char *port)
   struct addrinfo connectionInformation;
   struct addrinfo *encodedAddress;
   
-  if(this == NULL || ipv4Address == NULL || port == NULL){
+  routerPrivate *private = NULL; 
+  
+  private = (routerPrivate *)this;
+  
+  if(private == NULL || this == NULL || ipv4Address == NULL || port == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
   
-  if(this->socket != -1){
+  if(private->socket != -1){
     printf("Error: Router already in use");
     return 0; 
   }
@@ -319,7 +349,7 @@ static int ipv4Connect(routerObject *this, char *ipv4Address, char *port)
     return 0;
   }
   
-  if(this->socket == -1){
+  if(private->socket == -1){
     printf("Error: Failed to create new socket");
     return 0; 
   } 
@@ -334,7 +364,7 @@ static int ipv4Connect(routerObject *this, char *ipv4Address, char *port)
     return 0; 
   }
   
-  if( connect(this->socket, encodedAddress->ai_addr, encodedAddress->ai_addrlen) ){
+  if( connect(private->socket, encodedAddress->ai_addr, encodedAddress->ai_addrlen) ){
     printf("Error: Failed to connect to ipv4 address\n");
     return 0; 
   }
@@ -352,12 +382,15 @@ int ipv4Listen(routerObject *this, char *ipv4Address, int port)
   struct sockaddr_in bindInfo;
   struct in_addr     formattedAddress;
   
-  if(this == NULL || ipv4Address == NULL){
+  routerPrivate *private = NULL; 
+  private                = (routerPrivate *)this;
+  
+  if(private == NULL || this == NULL || ipv4Address == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
   
-  if(this->socket != -1){
+  if(private->socket != -1){
     printf("Error: Router already in use\n");
     return 0; 
   }
@@ -367,7 +400,7 @@ int ipv4Listen(routerObject *this, char *ipv4Address, int port)
     return 0; 
   }
 
-  if(this->socket == -1){
+  if(private->socket == -1){
     printf("Error: Failed to create socket\n");
     return 0; 
   }
@@ -382,12 +415,12 @@ int ipv4Listen(routerObject *this, char *ipv4Address, int port)
   bindInfo.sin_addr.s_addr = formattedAddress.s_addr; 
   
   
-  if( bind(this->socket, (const struct sockaddr*) &bindInfo, sizeof(bindInfo)) ){
+  if( bind(private->socket, (const struct sockaddr*) &bindInfo, sizeof(bindInfo)) ){
     printf("Error: Failed to bind to address\n");
     return 0; 
   }
   
-  if( listen(this->socket, SOMAXCONN) ){
+  if( listen(private->socket, SOMAXCONN) ){
     printf("Error: Failed to listen on socket\n");
     return 0; 
   }
@@ -402,17 +435,20 @@ int ipv4Listen(routerObject *this, char *ipv4Address, int port)
  */
 static int getConnection(routerObject *this)
 {
-  if(this == NULL){
+  routerPrivate *private = NULL; 
+  private                = (routerPrivate *)this;
+  
+  if(private == NULL || this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return -1; 
   }
   
-  if(this->socket == -1){
+  if(private->socket == -1){
     printf("Error: Socket not initialized, can't accept\n");
     return -1; 
   }
   
-  return accept(this->socket, NULL, NULL); 
+  return accept(private->socket, NULL, NULL); 
 }
 
 
@@ -422,12 +458,15 @@ static int getConnection(routerObject *this)
  */
 static int setSocket(routerObject *this, int socket)
 {
-  if(this == NULL){
+  routerPrivate *private = NULL; 
+  private                = (routerPrivate *)this;
+  
+  if(private == NULL || this == NULL){
     printf("Error: Something was NULL that shouldn't have been");
     return 0;
   }
   
-  this->socket = socket; 
+  private->socket = socket; 
   return 1;
 }
 
@@ -446,12 +485,15 @@ static int setSocketRecvTimeout(routerObject *this, int timeoutSecs, int timeout
 {
   struct timeval  recvTimeout;
   
-  if(this == NULL){
+  routerPrivate *private = NULL; 
+  private                = (routerPrivate *)this;
+  
+  if(private == NULL || this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0; 
   }
   
-  if(this->socket == -1){
+  if(private->socket == -1){
     printf("Error: Router doesn't have a socket\n");
     return 0; 
   }
@@ -460,7 +502,7 @@ static int setSocketRecvTimeout(routerObject *this, int timeoutSecs, int timeout
   recvTimeout.tv_sec  = timeoutSecs;  
   recvTimeout.tv_usec = timeoutUsecs;  
   
-  if( setsockopt(this->socket, SOL_SOCKET, SO_RCVTIMEO, &recvTimeout, sizeof(recvTimeout)) ){
+  if( setsockopt(private->socket, SOL_SOCKET, SO_RCVTIMEO, &recvTimeout, sizeof(recvTimeout)) ){
     printf("Error: Failed to set receive timeout on socket\n");
     return 0; 
   }

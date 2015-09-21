@@ -33,7 +33,7 @@ static int fileModeReadable(char *mode);
 static int fileModeWritable(char *mode);
 static int fileModeValid(char *mode);
 static int fileModeSeekable(char *mode); 
-static int initializeFileProperties(diskFilePrivate *privateThis, char *path, char *name, char *mode);
+static int initializeFileProperties(diskFileObject *this, char *path, char *name, char *mode);
 
 
 
@@ -87,31 +87,31 @@ diskFileObject *newDiskFile(void)
 static long dfBytesize(diskFileObject *this)
 {
   long            fileBytesize = 0;
-  diskFilePrivate *privateThis = NULL;
+  diskFilePrivate *private     = NULL;
   
-  privateThis = (diskFilePrivate *) this; 
+  private = (diskFilePrivate *) this; 
   
-  if( privateThis == NULL || privateThis->descriptor == NULL ){
+  if( private == NULL || this == NULL || private->descriptor == NULL ){ //this is always NULL if private it, but for readability
     printf("Error: Something was NULL that shouldn't have been");
     return -1; 
   }
   
-  if( fileModeSeekable(privateThis->mode) != 1 ){
+  if( fileModeSeekable(private->mode) != 1 ){
     printf("Error: File mode is not seekable (or it's NULL)");
     return -1; 
   }
     
-  if( fseek(privateThis->descriptor, 0, SEEK_END) == -1 ){
+  if( fseek(private->descriptor, 0, SEEK_END) == -1 ){
     printf("Error: Failed to seek to end of file\n");
     return -1; 
   }
   
-  if( (fileBytesize = ftell(privateThis->descriptor)) == -1 ){
+  if( (fileBytesize = ftell(private->descriptor)) == -1 ){
     printf("Error: Failed to get file bytesize\n");
     return -1; 
   }
   
-  if( fseek(privateThis->descriptor, 0, SEEK_SET) == -1 ){
+  if( fseek(private->descriptor, 0, SEEK_SET) == -1 ){
     printf("Error: Failed to seek to start of file\n");
     return -1; 
   }
@@ -167,11 +167,11 @@ static uint32_t dfWrite(diskFileObject *this, dataContainerObject *dataContainer
   int             fid            = 0; 
   void            *mappedMemory  = NULL;
   uint32_t        bytesToWrite   = 0;
-  diskFilePrivate *privateThis   = NULL;
+  diskFilePrivate *private       = NULL;
   
-  privateThis = (diskFilePrivate *)this; 
+  private = (diskFilePrivate *)this; 
   
-  if(privateThis == NULL || dataContainer == NULL){
+  if(private == NULL || this == NULL || dataContainer == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
@@ -183,17 +183,17 @@ static uint32_t dfWrite(diskFileObject *this, dataContainerObject *dataContainer
   
   bytesToWrite = dataContainer->bytesize; 
   
-  if( fileModeWritable(privateThis->mode) != 1 ){
+  if( fileModeWritable(private->mode) != 1 ){
     printf("Error: File mode isn't writable (or it's NULL)\n"); 
     return 0; 
   }
   
-  if(privateThis->descriptor == NULL){
+  if(private->descriptor == NULL){
     printf("Error: File is not open");
     return 0;
   }
   
-  fid = fileno(privateThis->descriptor);
+  fid = fileno(private->descriptor);
   if(fid == -1){
     printf("Error: Failed to get integer file descriptor\n");
     return 0; 
@@ -225,21 +225,21 @@ static dataContainerObject *dfRead(diskFileObject *this, uint32_t bytesToRead, u
   dataContainerObject *dataContainer = NULL; 
   void                *mappedMemory  = NULL;
   int                 fid            = 0;
-  diskFilePrivate     *privateThis   = NULL;
+  diskFilePrivate     *private       = NULL;
   
-  privateThis = (diskFilePrivate *)this; 
+  private = (diskFilePrivate *)this; 
   
-  if( privateThis == NULL ){
+  if( private == NULL || this == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return NULL; 
   }
   
-  if( fileModeReadable(privateThis->mode) != 1 ){
+  if( fileModeReadable(private->mode) != 1 ){
     printf("Error: File mode is not readable (or it's NULL)\n");
     return NULL; 
   }
     
-  if(privateThis->descriptor == NULL){
+  if(private->descriptor == NULL){
     printf("Error: File is not open\n");
     return NULL;
   }
@@ -250,7 +250,7 @@ static dataContainerObject *dfRead(diskFileObject *this, uint32_t bytesToRead, u
     return NULL; 
   }
 
-  fid = fileno(privateThis->descriptor);
+  fid = fileno(private->descriptor);
   if(fid == -1){
     printf("Error: Failed to get integer file descriptor\n");
     dataContainer->destroyDataContainer(&dataContainer); 
@@ -282,22 +282,22 @@ static dataContainerObject *dfRead(diskFileObject *this, uint32_t bytesToRead, u
  */
 static int dfOpen(diskFileObject *this, char *path, char *name, char *mode)
 {
-  diskFilePrivate *privateThis = NULL; 
+  diskFilePrivate *private = NULL; 
   
-  privateThis = (diskFilePrivate *)this; 
+  private = (diskFilePrivate *)this; 
   
-  if( privateThis == NULL || path == NULL || name == NULL || mode == NULL){
+  if( private == NULL || this == NULL || path == NULL || name == NULL || mode == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
   
-  if( !initializeFileProperties(privateThis, path, name, mode) ){
+  if( !initializeFileProperties(this, path, name, mode) ){
     printf("Error: Failed to initialize diskFile properties\n");
     return 0; 
   }
   
-  privateThis->descriptor = fopen( (const char*)privateThis->fullPath, privateThis->mode );
-  if(privateThis->descriptor == NULL){
+  private->descriptor = fopen( (const char*)private->fullPath, private->mode );
+  if(private->descriptor == NULL){
     printf("Error: Failed to open file\n"); //TODO reset object state? 
     return 0; 
   }
@@ -312,12 +312,15 @@ static int dfOpen(diskFileObject *this, char *path, char *name, char *mode)
 /*
  * initializeFileProperties returns 0 on error and 1 on success.  
  */
-int initializeFileProperties(diskFilePrivate *privateThis, char *path, char *name, char *mode)
+int initializeFileProperties(diskFileObject *this, char *path, char *name, char *mode)
 {
-  size_t  pathBytesize = 0;
-  size_t  nameBytesize = 0;
+  diskFilePrivate  *private     = NULL;
+  size_t           pathBytesize = 0;
+  size_t           nameBytesize = 0;
   
-  if(privateThis == NULL || path == NULL || name == NULL || mode == NULL){
+  private = (diskFilePrivate *)this; 
+  
+  if(private == NULL || this == NULL || path == NULL || name == NULL || mode == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0;
   }
@@ -332,25 +335,25 @@ int initializeFileProperties(diskFilePrivate *privateThis, char *path, char *nam
   nameBytesize = strlen(name);
   
   // +1 to ensure NULL termination, +1 to ensure room for terminating / if we need to add it. Wastes up to one byte of memory.
-  privateThis->fullPathBytesize = pathBytesize + nameBytesize + 2;  
+  private->fullPathBytesize = pathBytesize + nameBytesize + 2;  
   
-  privateThis->fullPath = (char *)secureAllocate(privateThis->fullPathBytesize);
-  if(privateThis->fullPath == NULL){
+  private->fullPath = (char *)secureAllocate(private->fullPathBytesize);
+  if(private->fullPath == NULL){
     printf("Error: Failed to allocate memory for path\n");
     return 0;
   }
      
   if(path[pathBytesize - 1] != '/'){
-    strncat(privateThis->fullPath, path, pathBytesize);
-    strncat(privateThis->fullPath, "/", 1);
-    strncat(privateThis->fullPath, name, nameBytesize); 
+    strncat(private->fullPath, path, pathBytesize);
+    strncat(private->fullPath, "/", 1);
+    strncat(private->fullPath, name, nameBytesize); 
   }
   else{
-    strncat(privateThis->fullPath, path, pathBytesize);
-    strncat(privateThis->fullPath, name, nameBytesize); 
+    strncat(private->fullPath, path, pathBytesize);
+    strncat(private->fullPath, name, nameBytesize); 
   }
   
-  privateThis->mode = mode; 
+  private->mode = mode; 
   
   return 1; 
 }
