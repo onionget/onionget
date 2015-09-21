@@ -227,8 +227,10 @@ static int sendNextRequestedFile(connectionObject *connection)
    goto error; 
   }
   
+  /*
   //NOTE that we don't want to destroy this because it is a pointer to the file on the cache linked list (or NULL if it isn't on it)
   outgoingFile = connection->server->cachedSharedFiles->getId(connection->server->cachedSharedFiles, currentFilename->data, currentFilename->bytesize);
+  */
   
   if(!outgoingFile && !sendFileNotFound(connection)){
     printf("Error: Failed to send file not found to client\n");
@@ -296,13 +298,18 @@ int prepareSharedFiles(serverObject *this)
       continue;
     }
     
-    diskFile = newDiskFile(this->sharedFolderPath, fileEntry->d_name, "r");
+    diskFile = newDiskFile();
     if(diskFile == NULL){
-      printf("Error: Failed to open file\n");
+      printf("Error: Failed to create diskFile object\n");
       return 0; 
     }
     
-    currentFileBytesize = diskFile->getBytesize(diskFile); 
+    if( !diskFile->dfOpen(diskFile, this->sharedFolderPath, fileEntry->d_name, "r") ){
+      printf("Error: Failed to open file on disk\n");
+      return 0; 
+    }
+    
+    currentFileBytesize = diskFile->dfBytesize(diskFile); 
     if(currentFileBytesize == -1){
       printf("Error: Failed to get shared file bytesize\n");
       return 0;
@@ -314,11 +321,15 @@ int prepareSharedFiles(serverObject *this)
       diskFile->closeTearDown(&diskFile);
       continue; 
     }
+    
+    
 
-    if( !this->cachedSharedFiles->insert(this->cachedSharedFiles, DLL_HEAD, fileEntry->d_name, strlen(fileEntry->d_name), diskFile->diskFileRead(diskFile), diskFile->getBytesize(diskFile), FILE_START) ){
+    /*
+    if( !this->cachedSharedFiles->insert(this->cachedSharedFiles, DLL_HEAD, fileEntry->d_name, strlen(fileEntry->d_name), diskFile->diskFileRead(diskFile, ), diskFile->getBytesize(diskFile), FILE_START) ){
       printf("Error: Failed to insert file into cached file list!");
       return 0; 
     }
+    */
     
     currentlyCachedBytes += currentFileBytesize;
     if(!diskFile->closeTearDown(&diskFile)){

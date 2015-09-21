@@ -127,10 +127,15 @@ static int getFiles(clientObject *this)
   for(fileCount = this->fileCount, currentFile = 0; fileCount--; currentFile++){ 
     
     //first we open a new diskFile to write the file to
-    diskFile = newDiskFile(this->dirPath, this->fileNames[currentFile], "w");
+    diskFile = newDiskFile();
     if(diskFile == NULL){
-      printf("Error: Failed to create file on disk, aborting\n");
+      printf("Error: Failed to create new diskFile object\n");
       return 0;
+    }
+    
+    if( !diskFile->dfOpen(diskFile, this->dirPath, this->fileNames[currentFile], "w") ){
+      printf("Error: Failed to open file on disk\n");
+      return 0; 
     }
     
     //then get the incoming file and write it to the disk
@@ -197,7 +202,7 @@ static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
     }
     
     //then write it to disk
-    bytesWritten = diskFile->diskFileWrite(diskFile, incomingFileChunk, writeOffset);
+    bytesWritten = diskFile->dfWrite(diskFile, incomingFileChunk, writeOffset);
     if(bytesWritten == 0){
       printf("Error: Failed to write file to disk, aborting\n");
       return 0;

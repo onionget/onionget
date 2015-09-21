@@ -3,16 +3,12 @@
 #include "dataContainer.h"
 
 typedef struct diskFileObject{
-  char     *mode;
-  char     *fullPath;
-  uint32_t fullPathBytesize; 
-  FILE     *descriptor; 
-  
-  uint32_t (*diskFileWrite)(struct diskFileObject* this, dataContainerObject* dataContainer, uint32_t writeOffset);
-  dataContainerObject *(*diskFileRead)(struct diskFileObject* this, uint32_t bytesToRead, uint32_t readOffset); 
-  int (*closeTearDown)(struct diskFileObject** thisPointer); 
-  long int (*getBytesize)(struct diskFileObject* this);
+  uint32_t            (*dfWrite)(struct diskFileObject* this, dataContainerObject* dataContainer, uint32_t writeOffset);
+  dataContainerObject *(*dfRead)(struct diskFileObject* this, uint32_t bytesToRead, uint32_t readOffset); 
+  int                 (*closeTearDown)(struct diskFileObject** thisPointer); 
+  long int            (*dfBytesize)(struct diskFileObject* this);
+  int                 (*dfOpen)(struct diskFileObject *this, char *path, char *name, char *mode);
 }diskFileObject; 
 
 
-diskFileObject* newDiskFile(char* path, char* name, char* mode); 
+diskFileObject* newDiskFile(void); 

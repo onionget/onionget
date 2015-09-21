@@ -10,3 +10,4 @@ typedef struct fileBankObject{
 }fileBankObject;
 
 
+fileBankObject *newFileBank(void);

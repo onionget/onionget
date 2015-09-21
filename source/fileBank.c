@@ -1,24 +1,25 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+
+#include "fileBank.h"
+#include "dataContainer.h"
+#include "memoryManager.h"
 
 
-static dataContainerObject *getFile(fileBankObject this, char *id, uint32_t idBytesize);
 
-
-//private object members
-static struct fileBankPrivate{
- dllObject *fileObjects;  
-}
-
-
+/*
 //initialize new fileBankObject
 fileBankObject *newFileBank(void)
 {
-  fileBankObject *filebank; 
+  fileBankObject *fileBank; 
   dllObject      *fileObjects;
   
   //allocate memory for the fileBankObject
-  fileBankObject = (fileBankObject *)secureAllocate(sizeof(*fileBankObject)); 
+  fileBank = (fileBankObject *)secureAllocate(sizeof(*fileBank)); 
   //allocate memory for the fileBankObjects private properties
-  fileBankObject->fileBankPrivate = (fileBankPrivate)secureAllocate(sizeof(struct fileBankPrivate)); 
+  fileBank->fileBankPrivate = (fileBankPrivate)secureAllocate(sizeof(struct fileBankPrivate)); 
 
   
   //initialize private properties, the DLL for files
@@ -27,11 +28,13 @@ fileBankObject *newFileBank(void)
   
   fileBank->getFile = &getFile; 
 }
+*/
 
 
 /*
  *  getId returns NULL if an error occurs or the item identified by id is not found in the list. On success it returns a pointer to to requested dataContainer.
  */
+/*
 static dataContainerObject *getFile(fileBankObject this, char *id, uint32_t idBytesize)
 {
   dllMember *currentMember;
@@ -49,3 +52,4 @@ static dataContainerObject *getFile(fileBankObject this, char *id, uint32_t idBy
    
   return NULL; 
 }
+*/ 
