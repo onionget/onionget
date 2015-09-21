@@ -47,7 +47,7 @@ static int sendSocks5ConnectRequest       ( routerObject  *this                 
 static int initializeSocks5Protocol       ( routerObject  *this                                                                                                  );
 static int setSocketRecvTimeout           ( routerObject  *this                   , int timeoutSecs            , int timeoutUsecs                                );
 
-
+//TODO add reinitialize function (close socket and reset to -1); 
 
 
 

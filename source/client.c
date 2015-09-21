@@ -70,6 +70,7 @@ clientObject *newClient(void)
 
 /************ PUBLIC METHODS ******************/
 
+//TODO destroy function
 
 //returns 0 on error and 1 on success (dependency injection) 
 static int setRouter(clientObject *this, routerObject *router)
@@ -358,6 +359,3 @@ static int hsValueSanityCheck(char *onionAddress, char *onionPort)
   
   return 1; 
 }
-
- 
-

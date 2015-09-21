@@ -124,13 +124,13 @@ static int serverListen(serverObject *this)
     }
     
     //block until a connecting client uses the connection object 
-    if( !connection->connectedRouter->setSocket( connection->connectedRouter, this->listeningRouter->getConnection(this->listeningRouter) ) ){
+    if( !connection->router->setSocket( connection->router, this->listeningRouter->getConnection(this->listeningRouter) ) ){
       printf("Error: Failed to set active connection router socket\n");
       return 0;
     }
     
     if( pthread_create(&processingThread, NULL, processConnection, (void*)connection) != 0 ){     
-      if( !connection->connectedRouter->destroyRouter(&connection->connectedRouter) ){
+      if( !connection->router->destroyRouter(&connection->router) ){
 	printf("Error: Failed to destroy router object\n");
 	return 0;	
       }
@@ -163,13 +163,13 @@ static void *processConnection(void *connectionV)
   connection = (connectionObject*)connectionV;
   
   //basic sanity checking
-  if( connection == NULL || connection->connectedRouter == NULL || connection->server == NULL ){
+  if( connection == NULL || connection->router == NULL || connection->server == NULL ){
     printf("Error: Something was NULL that shouldn't have been\n");
     goto cleanup; 
   }
   
   //get the total incoming bytesize, perform basic sanity check
-  totalBytesize = connection->connectedRouter->getIncomingBytesize(connection->connectedRouter); 
+  totalBytesize = connection->router->getIncomingBytesize(connection->router); 
   if(totalBytesize > MAX_REQUEST_STRING_BYTESIZE || totalBytesize == 0){
     printf("Error: Client wants to send more bytes than allowed, or error in getting total request bytesize\n");
     goto cleanup; 
@@ -201,12 +201,12 @@ static dataContainerObject *getRequestedFilename(connectionObject *connection)
 {
   uint32_t fileIdBytesize;
   
-  fileIdBytesize = connection->connectedRouter->getIncomingBytesize(connection->connectedRouter); 
+  fileIdBytesize = connection->router->getIncomingBytesize(connection->router); 
   if(fileIdBytesize > MAX_FILE_ID_BYTESIZE || fileIdBytesize == 0){
    return NULL;  
   }
         
-  return connection->connectedRouter->receive(connection->connectedRouter, fileIdBytesize);  
+  return connection->router->receive(connection->router, fileIdBytesize);  
 }
   
 //returns bytesize of sent filename (or -1 on error); 
@@ -229,6 +229,7 @@ static int sendNextRequestedFile(connectionObject *connection)
   
   /*
   //NOTE that we don't want to destroy this because it is a pointer to the file on the cache linked list (or NULL if it isn't on it)
+  //NOTE TODO stop getting cachedSharedFiles from connection object (which is obsoleted) and rather use static file global heap variable 
   outgoingFile = connection->server->cachedSharedFiles->getId(connection->server->cachedSharedFiles, currentFilename->data, currentFilename->bytesize);
   */
   
@@ -237,12 +238,12 @@ static int sendNextRequestedFile(connectionObject *connection)
     goto error; 
   }
   
-  if( !connection->connectedRouter->transmitBytesize(connection->connectedRouter, outgoingFile->bytesize) ){
+  if( !connection->router->transmitBytesize(connection->router, outgoingFile->bytesize) ){
     printf("Error: Failed to transmit file bytesize to client\n");
     goto error;
   }
   
-  if( !connection->connectedRouter->transmit(connection->connectedRouter, outgoingFile->data, outgoingFile->bytesize) ){
+  if( !connection->router->transmit(connection->router, outgoingFile->data, outgoingFile->bytesize) ){
     printf("Error: Failed to transmit file to client\n");
     goto error; 
   }
@@ -260,11 +261,11 @@ static int sendNextRequestedFile(connectionObject *connection)
   
 static int sendFileNotFound(connectionObject *connection)
 {
-  if( !connection->connectedRouter->transmitBytesize( connection->connectedRouter, strlen("not found") ) ){ 
+  if( !connection->router->transmitBytesize( connection->router, strlen("not found") ) ){ 
     return 0;
   }
       
-  if( !connection->connectedRouter->transmit( connection->connectedRouter, "not found", strlen("not found") ) ){
+  if( !connection->router->transmit( connection->router, "not found", strlen("not found") ) ){
     return 0; 
   }
     
