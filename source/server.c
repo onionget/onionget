@@ -8,7 +8,6 @@
 #include <unistd.h>
 
 #include "dataContainer.h"
-#include "connection.h" 
 #include "router.h"
 #include "dll.h"
 #include "memoryManager.h"

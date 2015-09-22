@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "memoryManager.h"
 
-static int memoryClear(volatile unsigned char *memoryPointer, size_t bytesize);
+static int memoryClear(volatile unsigned char *memoryPointerV, size_t bytesize);
 
 /*
  * secureAllocate returns NULL on error, otherwise returns a pointer to the allocated memory buffer, which is bytesize bytes and initialized to NULL. 
@@ -31,17 +31,21 @@ void *secureAllocate(size_t bytesize)
 /*
  * returns 1 on success and 0 on error
  * 
- * memoryClear is passed a volatile unsigned char* pointing to bytesize bytes, clears each byte by setting to 0
+ * memoryClear is passed a void* pointing to bytesize bytes, clears each byte by setting to 0
  * 
  * implemented because the memset solution in MEM03-C causes compiler warnings, this should do the same thing without
  * compiler warning 
  */
-static int memoryClear(volatile unsigned char *memoryPointer, size_t bytesize)
+static int memoryClear(void *memoryPointerV, size_t bytesize)
 {
-  if(memoryPointer == NULL){
+  volatile unsigned char *memoryPointer = NULL;
+  
+  if(memoryPointerV == NULL){
     printf("Error: Something was NULL that shouldn't have been\n");
     return 0; 
   }
+  
+  memoryPointer = memoryPointerV; 
   
   while(bytesize--){
     *memoryPointer++ = 0;
@@ -63,13 +67,11 @@ static int memoryClear(volatile unsigned char *memoryPointer, size_t bytesize)
  * implementation will be verified as not optimized out, however using a volatile pointer in compliance with MEM03-C, and also using a memory barrier as 
  * suggested by various security experts. 
  * 
- * TODO: Make sure volatile pointer usage is in compliance with EXP32-C 
- * 
  */
 int secureFree(void *memory, size_t bytesize)
 {
   void                   **memoryCorrectCast; 
-  volatile unsigned char *dataBuffer;
+  void                   *dataBuffer;
 
   //this function is actually passed a void**, declared void* in function definition for technical reasons
   memoryCorrectCast = (void**)memory; 
@@ -86,7 +88,7 @@ int secureFree(void *memory, size_t bytesize)
   }
 
   //prepare to clear memory buffer
-  dataBuffer = *(volatile unsigned char**)memoryCorrectCast; 
+  dataBuffer = *(void**)memoryCorrectCast; 
     
   //clear memory buffer, volatile pointer in compliance with MEM03-C
   if( !memoryClear(dataBuffer, bytesize) ){

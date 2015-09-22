@@ -12,6 +12,7 @@ typedef struct routerBankPrivate{
   dllObject          *routerObjects; 
 }routerBankPrivate;
 
+static int depositRouterObject(routerBankObject *this, routerObject *router);
 
 routerBankObject *newRouterBank(void)
 {
@@ -26,7 +27,7 @@ routerBankObject *newRouterBank(void)
   
   //initialize public methods
   privateThis->publicRouterBank.depositRouterObject  = &depositRouterObject; 
-  privateThis->publicRouterBank.getRouterObject      = &getRouterObject;
+  privateThis->publicRouterBank.getRouterObject      = &withdrawRouterObject;
   
   //initialize private properties TODO dependency inject this?
   privateThis->routerObjects = newDll(); 
