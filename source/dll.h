@@ -8,7 +8,7 @@ typedef struct dllMember
   struct dllMember   *previous;
   struct dllMember   *next;
   void               *memberData; 
-  uint8_t            locked; 
+  volatile int       locked; 
 }dllMember;
 
 typedef struct dllObject{

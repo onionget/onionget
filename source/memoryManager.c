@@ -70,8 +70,8 @@ static int memoryClear(void *memoryPointerV, size_t bytesize)
  */
 int secureFree(void *memory, size_t bytesize)
 {
-  void                   **memoryCorrectCast; 
-  void                   *dataBuffer;
+  void **memoryCorrectCast; 
+  void *dataBuffer;
 
   //this function is actually passed a void**, declared void* in function definition for technical reasons
   memoryCorrectCast = (void**)memory; 
