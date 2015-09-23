@@ -3,7 +3,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/capability.h>
-#include <sys/mman.h>
+#include <sys/mman.h> //don't think this is needed actually TODO
+#include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -20,7 +21,7 @@ static int disableIsolateFs(void);
 
 /*
  * FIO16-C suggests using chroot to isolate processes from the wider filesystem, this code provides a solution for chrooting the process
- * MEM06-C suggests not allowing sensitive data to be written to disk, this requires mlock, this code allows enabling mlock 
+ * MEM06-C suggests not allowing sensitive data to be written to disk, this requires mlock, this code allows enabling mlock (and preventing core dumps)
  * 
  * Note that chroot as a security technique is highly controversially and that SELinux and/or similar MAC/RBAC profiles should be 
  * used for security via isolation, however I don't believe that using chroot in addition to this will cause any problems, and perhaps
@@ -32,6 +33,21 @@ static int disableIsolateFs(void);
  * 
  * TODO make a bash compilation script that automatically sets the appropriate binary capabilities 
  */
+
+
+/***functions related to core dump ******/
+int disableCoreDumps(void)
+{
+  struct rlimit limit; 
+  limit.rlim_cur = 0;
+  limit.rlim_max = 0;
+  if(setrlimit(RLIMIT_CORE, &limit) != 0){
+    printf("Error: Failed to disable core dumps\n");
+    return 0; 
+  } 
+  
+  return 1; 
+}
 
 
 /*** Functions related to capabilities ****/
