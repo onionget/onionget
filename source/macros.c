@@ -3,7 +3,7 @@
 #include <string.h>
 #include <time.h>
 
-static char *getTimeString(void);
+static char *getTimeInString(void);
 
 
 /*** For logging macro ***/ 
@@ -12,20 +12,20 @@ static char *getTimeString(void);
 //never call this directly but always with macro logEvent(category, message) 
 void ogLogMacroBackEnd(char *category, char *message, char *filename, unsigned int lineNumber) 
 {
-  char *timeString = getTimeString(); 
+  char *timeInString = getTimeInString(); 
   
   
-  if(category == NULL || message == NULL || filename == NULL || timeString == NULL){
+  if(category == NULL || message == NULL || filename == NULL || timeInString == NULL){
     printf("Error: Failed to log error, but didn't fail to log log error error\n");
     return; 
   }
   
-  printf("%s: %s --- %s:%u --- %s \n", category, message, filename, lineNumber, timeString); 
+  printf("%s: %s --- %s:%u --- %s \n", category, message, filename, lineNumber, timeInString); 
 }
 
 
 //returns string from ctime function or NULL on error
-static char *getTimeString()
+static char *getTimeInString()
 {
   time_t timeInSeconds;
   char   *timeInString;

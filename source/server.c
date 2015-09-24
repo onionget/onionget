@@ -14,6 +14,7 @@
 #include "diskFile.h"
 #include "server.h"
 #include "ogEnums.h"
+#include "macros.h"
 
 static void *processConnection(void *connectionObjectV);
 int prepareSharedFiles(serverObject *this);
@@ -42,20 +43,20 @@ serverObject *newServer(char *sharedFolderPath, char *bindAddress, int listenPor
   serverObject *this; 
     
   if(sharedFolderPath == NULL || bindAddress == NULL){
-    printf("Error: Something was NULL that shouldn't have beenaaaaaa\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return NULL;
   }
   
   this = (serverObject *)secureAllocate(sizeof(*this));
   if(this == NULL){ 
-    printf("Error: Failed to allocate memory to instantiate server\n");
+    logEvent("Error", "Failed to allocate memory to instantiate server");
     return NULL; 
   }
   
   
   //simple unsigned integer wrap protection, limits cache to slightly over four gigabytes
   if(maxMemoryCacheMegabytes > UINT32_MAX / BYTES_IN_A_MEGABYTE){
-    printf("Error: maximum cache megabyte size supported is %lu, as cache is internally stored in bytes in a uint32_t\n", (unsigned long) (UINT32_MAX / BYTES_IN_A_MEGABYTE) ); 
+    logEvent("Error", "maximum cache megabyte size supported is (UINT32_MAX / BYTES_IN_A_MEGABYTE), as cache is internally stored in bytes in a uint32_t");   
     return NULL; 
   }
   else{
@@ -70,13 +71,13 @@ serverObject *newServer(char *sharedFolderPath, char *bindAddress, int listenPor
   
   this->cachedSharedFiles = newDll();
   if(this->cachedSharedFiles == NULL){
-    printf("Error: Failed to create cached file linked list, server instantiation failed\n");
+    logEvent("Error", "Failed to create cached file linked list, server instantiation failed");
     return NULL; 
   }
   
   this->listeningRouter = newRouter();
   if(this->listeningRouter == NULL){
-    printf("Error: Failed to create router object, server instantiation failed\n");
+    logEvent("Error", "Failed to create router object, server instantiation failed");
     return NULL; 
   }
   
@@ -85,12 +86,12 @@ serverObject *newServer(char *sharedFolderPath, char *bindAddress, int listenPor
   this->serverListen = &serverListen; 
   
   if( !prepareSharedFiles(this) ){
-    printf("Error: Failed to cache shared files!");
+    logEvent("Error", "Failed to cache shared files!");
     return NULL; 
   }
   
   if( !this->listeningRouter->ipv4Listen(this->listeningRouter, this->bindAddress, this->listenPort) ){
-    printf("Error: Failed to set server in a listening state\n");
+    logEvent("Error", "Failed to set server in a listening state");
     return NULL; 
   }
   
@@ -110,7 +111,7 @@ static int serverListen(serverObject *this)
   connectionObject *connection;
   
   if(this == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
@@ -118,24 +119,24 @@ static int serverListen(serverObject *this)
     //create a connection object 
     connection = newActiveConnection(this);
     if(connection == NULL){
-      printf("Error: server failed to new a connection object (probably because this was NULL)\n");
+      logEvent("Error", "server failed to new a connection object (probably because this was NULL)");
       return 0;
     }
     
     //block until a connecting client uses the connection object 
     if( !connection->router->setSocket( connection->router, this->listeningRouter->getConnection(this->listeningRouter) ) ){
-      printf("Error: Failed to set active connection router socket\n");
+      logEvent("Error", "Failed to set active connection router socket");
       return 0;
     }
     
     if( pthread_create(&processingThread, NULL, processConnection, (void*)connection) != 0 ){     
       if( !connection->router->destroyRouter(&connection->router) ){
-	printf("Error: Failed to destroy router object\n");
+	logEvent("Error", "Failed to destroy router object");
 	return 0;	
       }
      
       if( !secureFree(&connection, sizeof(*connection)) ){
-        printf("Error: Failed to free connectionObject object\n");
+        logEvent("Error", "Failed to free connectionObject object");
         return 0;
       }
     }
@@ -163,14 +164,14 @@ static void *processConnection(void *connectionV)
   
   //basic sanity checking
   if( connection == NULL || connection->router == NULL || connection->server == NULL ){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     goto cleanup; 
   }
   
   //get the total incoming bytesize, perform basic sanity check
   totalBytesize = connection->router->getIncomingBytesize(connection->router); 
   if(totalBytesize > MAX_REQUEST_STRING_BYTESIZE || totalBytesize == 0){
-    printf("Error: Client wants to send more bytes than allowed, or error in getting total request bytesize\n");
+    logEvent("Error", "Client wants to send more bytes than allowed, or error in getting total request bytesize");
     goto cleanup; 
   }
   
@@ -180,18 +181,18 @@ static void *processConnection(void *connectionV)
     
     //should we check for this?
     if(totalBytesize - filenameBytesize < 0){
-      printf("Error: Client sent more bytes than it said it was going to\n");
+      logEvent("Error", "Client sent more bytes than it said it was going to");
       goto cleanup; 
     }
     
     if(filenameBytesize == -1){
-      printf("Error: Failed to send file to client\n");
+      logEvent("Error", "Failed to send file to client");
       goto cleanup;  
     }
   }
     
   cleanup:  
-    if(connection != NULL && !connection->destroyConnectionObject(&connection)) printf("Error: Failed to destroy active connection object\n"); 
+    if(connection != NULL && !connection->destroyConnectionObject(&connection)) logEvent("Error", "Failed to destroy active connection object"); 
     return NULL;  
 }
   
@@ -216,13 +217,13 @@ static int sendNextRequestedFile(connectionObject *connection)
   uint32_t            filenameBytesize = 0;
   
   if(connection == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     goto error; 
   }
   
   currentFilename = getRequestedFilename(connection); 
   if(currentFilename == NULL){
-   printf("Error: Failed to get file ID from client\n");
+   logEvent("Error", "Failed to get file ID from client");
    goto error; 
   }
   
@@ -233,17 +234,17 @@ static int sendNextRequestedFile(connectionObject *connection)
   */
   
   if(!outgoingFile && !sendFileNotFound(connection)){
-    printf("Error: Failed to send file not found to client\n");
+    logEvent("Error", "Failed to send file not found to client");
     goto error; 
   }
   
   if( !connection->router->transmitBytesize(connection->router, outgoingFile->bytesize) ){
-    printf("Error: Failed to transmit file bytesize to client\n");
+    logEvent("Error", "Failed to transmit file bytesize to client");
     goto error;
   }
   
   if( !connection->router->transmit(connection->router, outgoingFile->data, outgoingFile->bytesize) ){
-    printf("Error: Failed to transmit file to client\n");
+    logEvent("Error", "Failed to transmit file to client");
     goto error; 
   }
   
@@ -282,13 +283,13 @@ int prepareSharedFiles(serverObject *this)
   long                currentFileBytesize; 
   
   if(this == NULL){
-    printf("Error: Something was NULL that shouldn't have beeaaan\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
    
   directory = opendir( (const char*) this->sharedFolderPath );
   if(directory == NULL){
-    printf("Error: Failed to open shared folder\n");
+    logEvent("Error", "Failed to open shared folder");
     return 0;
   }
   
@@ -300,24 +301,24 @@ int prepareSharedFiles(serverObject *this)
     
     diskFile = newDiskFile();
     if(diskFile == NULL){
-      printf("Error: Failed to create diskFile object\n");
+      logEvent("Error", "Failed to create diskFile object");
       return 0; 
     }
     
     if( !diskFile->dfOpen(diskFile, this->sharedFolderPath, fileEntry->d_name, "r") ){
-      printf("Error: Failed to open file on disk\n");
+      logEvent("Error", "Failed to open file on disk");
       return 0; 
     }
     
     currentFileBytesize = diskFile->dfBytesize(diskFile); 
     if(currentFileBytesize == -1){
-      printf("Error: Failed to get shared file bytesize\n");
+      logEvent("Error", "Failed to get shared file bytesize");
       return 0;
     }
     
     //if adding the file to the cache will exhaust the cache space then don't add it to the linked list
-    if( (currentlyCachedBytes + currentFileBytesize) > this->maxMemoryCacheBytesize ){ //TODO keep track of size of cache in fileBank? 
-      printf("Notice: Adding file %s will exhaust available cache, skipping\n", fileEntry->d_name); 
+    if( (currentlyCachedBytes + currentFileBytesize) > this->maxMemoryCacheBytesize ){ //TODO keep track of size of cache in fileBank? TODO make log function work with interpolated strings
+      logEvent("Notice", "Adding file will exhaust available cache, skipping");
       diskFile->closeTearDown(&diskFile);
       continue; 
     }
@@ -333,7 +334,7 @@ int prepareSharedFiles(serverObject *this)
     
     currentlyCachedBytes += currentFileBytesize;
     if(!diskFile->closeTearDown(&diskFile)){
-      printf("Error: Failed to close the disk file\n");
+      logEvent("Error", "Failed to close the disk file");
       return 0; 
     }
   }

@@ -2,4 +2,4 @@
 
 
 //never call this directly but always with macro logEvent(category, message) 
-void ogLogMacroBackEnd(char *category, char *message, char *filename, unsigned int lineNumber) 
+void ogLogMacroBackEnd(char *category, char *message, char *filename, unsigned int lineNumber); 

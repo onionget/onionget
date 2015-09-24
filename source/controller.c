@@ -30,7 +30,7 @@ int main(int argc, char *argv[])
   int successIndicated = 0; 
   
   if(!systemSanityCheck()){ 
-    printf("Error: System incompatibility detected\n"); 
+    logEvent("Error", "System incompatibility detected"); 
     exit(1);
   }
   
@@ -40,11 +40,11 @@ int main(int argc, char *argv[])
   else                                                                   showHelpExit();     
   
   if(!successIndicated){
-    printf("Operation Failed\n");
+    logEvent("Error", "Operation Failed");
     return 0; 
   }
   
-  printf("Operation Completed\n"); //note that server blocks and will never get here on success
+  logEvent("Notice", "Operation Completed"); //note that server blocks and will never get here on success
   */
   return 0;
 }
@@ -62,7 +62,7 @@ static int systemSanityCheck()
   pageBytesize = sysconf(_SC_PAGE_SIZE);
   
   if( pageBytesize != 4096 && pageBytesize != 8192 && pageBytesize != 65536 && pageBytesize != 262144 && pageBytesize != 1048576 && pageBytesize != 2097152){
-    printf("Error: Currently only systems using 4096, 8129, 65536, 262144, 1048576, and 2097125 byte page sizes are currently supported\n");
+    logEvent("Error", "Currently only systems using 4096, 8129, 65536, 262144, 1048576, and 2097125 byte page sizes are currently supported");
     return 0;
   }
   
@@ -81,7 +81,7 @@ static int initializeClient(int argc, char *argv[])
   uint64_t       fileCount;
   
   if( argv[C_TOR_BIND_ADDRESS] == NULL || argv[C_TOR_PORT] == NULL || argv[C_ONION_ADDRESS] == NULL || argv[C_ONION_PORT] == NULL || argv[C_OPERATION] == NULL || argv[C_DIR_PATH] == NULL || argv[C_FIRST_FILE_NAME] == NULL ){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0; 
   } 
   
@@ -95,11 +95,11 @@ static int initializeClient(int argc, char *argv[])
   
   
   if( !client->executeOperation(client) ){
-    printf("Error: Client operation failed\n");
+    logEvent("Error", "Client operation failed");
     return 0; 
   }
  
-  printf("Client operation success\n");
+  logEvent("Notice", "Client operation success");
   return 1;
 }
 */
@@ -119,7 +119,7 @@ static int initializeServer(int argc, char *argv[])
   uint64_t     maxMemoryCacheMegabytes;
   
   if( argv[S_BIND_ADDRESS] == NULL || argv[S_LISTEN_PORT] == NULL || argv[S_DIR_PATH] == NULL || argv[S_MEM_MEGA_CACHE] == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
       
@@ -133,7 +133,7 @@ static int initializeServer(int argc, char *argv[])
   
   server = newServer( argv[S_DIR_PATH], argv[S_BIND_ADDRESS], listenPort, maxMemoryCacheMegabytes );
   if(server == NULL){
-    printf("Failed to instantiate server object\n");
+    logEvent("Error", "Failed to instantiate server object");
     return 0;
   }
   
@@ -148,22 +148,22 @@ static int initializeServer(int argc, char *argv[])
 static int serverSanityCheck(int argc, char *bindAddress, char *listenPort)
 {
   if(bindAddress == NULL || listenPort == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0; 
   }
   
   if(argc != S_FIXED_CLI_INPUTS){
-    printf("Error: Invalid number of arguments for server\n");
+    logEvent("Error", "Invalid number of arguments for server");
     return 0; 
   }
   
   if( strlen(listenPort) > 5 || strtol(listenPort, NULL, 10) > HIGHEST_VALID_PORT){
-   printf("Error: Listen port must be at or below 65535\n");
+   logEvent("Error", "Listen port must be at or below 65535");
    return 0; 
   }
   
   if( strlen(bindAddress) > strlen("111.111.111.111")){
-    printf("Error: Bind address invalid length");
+    logEvent("Error", "Bind address invalid length");
     return 0;
   }
   
@@ -179,6 +179,6 @@ static int showHelpExit()
   printf("Client Syntax: [./onionGet] [\"client\"] [tor bind address] [tor listen port] [onion address] [onion port] [operation] [save path]\n\n");
   printf("Client Operations: [\"--get\"] [filenames] ----- gets the files named from the server\n\n");
   printf("Server Syntax: [./onionGet] [\"server\"] [bind address] [listen port] [shared folder path] [memory cache megabytes (max 4294)]\n\n");
-  exit(1); 
+  exit(0); 
 }
 */

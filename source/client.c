@@ -10,6 +10,7 @@
 #include "diskFile.h" 
 #include "client.h"
 #include "ogEnums.h" 
+#include "macros.h"
 
 
 
@@ -49,7 +50,7 @@ clientObject *newClient(void)
   //Allocate memory for the object
   privateThis = (clientPrivate *)secureAllocate(sizeof(*privateThis)); 
   if(privateThis == NULL){
-    printf("Error: Failed to allocate new client object\n");
+    logEvent("Error", "Failed to allocate new client object");
     return NULL; 
   }
   
@@ -80,7 +81,7 @@ static int setRouter(clientObject *this, routerObject *router)
   private = (clientPrivate *)this;
   
   if(private == NULL || this == NULL || router == NULL){
-    printf("Error: Failed to set the clients router\n");
+    logEvent("Error", "Failed to set the clients router");
     return 0; 
   }
   
@@ -98,13 +99,13 @@ static int initializeSocks(clientObject *this, char *torBindAddress, char *torPo
   private = (clientPrivate *)this;
   
   if(this == NULL || private == NULL || private->router == NULL || torBindAddress == NULL || torPort == NULL){
-    printf("Error: something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0; 
   }
   
   //connect the client objects router to Tor 
   if(!private->router->ipv4Connect(private->router, torBindAddress, torPort)){
-    printf("Error: Failed to connect client\n");
+    logEvent("Error", "Failed to connect client");
     return 0;
   }
   
@@ -123,18 +124,18 @@ static int establishConnection(clientObject *this, char *onionAddress, char *oni
   
   //sanity checking
   if(private == NULL || private->router == NULL || this == NULL || onionAddress == NULL || onionPort == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n"); 
+    logEvent("Error", "Something was NULL that shouldn't have been"); 
     return 0;
   }
   
   if( !hsValueSanityCheck(onionAddress, onionPort) ){
-    printf("Error: Invalid onion destination\n");
+    logEvent("Error", "Invalid onion destination");
     return 0; 
   }
      
   //tell Tor to connect to the onion_address:port
   if( !private->router->socks5Connect(private->router, onionAddress, ONION_ADDRESS_BYTESIZE, (uint16_t)strtol(onionPort, NULL, 10)) ){
-    printf("Error: Failed to connect to destination address\n");
+    logEvent("Error", "Failed to connect to destination address");
     return 0;
   }
   
@@ -155,13 +156,13 @@ static int getFiles(clientObject *this, char *dirPath, char **fileNames, uint32_
   diskFileObject *diskFile   = NULL; 
   
   if( this == NULL || dirPath == NULL || fileNames == NULL ){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
   //send the server the requested file names
   if( !sendRequestedFilenames(this, fileNames, fileCount) ){
-    printf("Error: Failed to send server request string\n");
+    logEvent("Error", "Failed to send server request string");
     return 0;
   }
     
@@ -171,24 +172,24 @@ static int getFiles(clientObject *this, char *dirPath, char **fileNames, uint32_
     //first we open a new diskFile to write the file to
     diskFile = newDiskFile();
     if(diskFile == NULL){
-      printf("Error: Failed to create new diskFile object\n");
+      logEvent("Error", "Failed to create new diskFile object");
       return 0;
     }
     
     if( !diskFile->dfOpen(diskFile, dirPath, fileNames[currentFile], "w") ){
-      printf("Error: Failed to open file on disk\n");
+      logEvent("Error", "Failed to open file on disk");
       return 0; 
     }
     
     //then get the incoming file and write it to the disk
     if( !getIncomingFile(this, diskFile) ){
-      printf("Error: Failed to get file\n");
+      logEvent("Error", "Failed to get file");
       return 0; 
     }
     
     //then close the disk file
     if( !diskFile->closeTearDown(&diskFile) ){
-      printf("Error: Failed to tear down disk file\n");
+      logEvent("Error", "Failed to tear down disk file");
       return 0;
     }
  
@@ -221,14 +222,14 @@ static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
   private = (clientPrivate *)this; 
   
   if(private == NULL || private->router == NULL || this == NULL || diskFile == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0; 
   }
   
   //the server sends us the incoming file's bytesize
   incomingFileBytesize = private->router->getIncomingBytesize(private->router); 
   if(!incomingFileBytesize){
-    printf("Error: Failed to get incoming file bytesize, aborting\n");
+    logEvent("Error", "Failed to get incoming file bytesize, aborting");
     return 0;
   }
   
@@ -242,14 +243,14 @@ static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
     //get up to FILE_CHUNK_BYTESIZE bytes of the file
     incomingFileChunk = private->router->receive(private->router, bytesToGet);
     if(incomingFileChunk == NULL){
-      printf("Error: Failed to receive data, aborting\n");
+      logEvent("Error", "Failed to receive data, aborting");
       return 0; 
     }
     
     //then write it to disk
     bytesWritten = diskFile->dfWrite(diskFile, incomingFileChunk, writeOffset);
     if(bytesWritten == 0){
-      printf("Error: Failed to write file to disk, aborting\n");
+      logEvent("Error", "Failed to write file to disk, aborting");
       return 0;
     }
     writeOffset += bytesWritten; 
@@ -257,7 +258,7 @@ static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
     
     //then destroy the data container that holds the current file chunk in RAM
     if( !incomingFileChunk->destroyDataContainer(&incomingFileChunk) ){
-      printf("Error: Failed to destroy data container\n");
+      logEvent("Error", "Failed to destroy data container");
       return 0; 
     }
     
@@ -281,31 +282,31 @@ static int sendRequestedFilenames(clientObject *this, char **fileNames, uint32_t
   private = (clientPrivate *)this;
   
   if( private == NULL || private->router == NULL || this == NULL ){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
   fileRequestStringBytesize = calculateTotalRequestBytesize(fileNames, fileCount);
   if(fileRequestStringBytesize == -1){
-    printf("Error: failed to calculate file request string bytesize\n");
+    logEvent("Error", "Failed to calculate file request string bytesize");
     return 0; 
   }
   
   //let the server know the bytesize of the request string
   if( !private->router->transmitBytesize(private->router, fileRequestStringBytesize) ){
-    printf("Error: Failed to transmit request string\n");
+    logEvent("Error", "Failed to transmit request string");
     return 0;
   }
   
   //send the server the requested file file file names TODO clean this up (ie: don't take strlen twice)  
   for(currentFile = 0; currentFile != fileCount; currentFile++){
     if(!private->router->transmitBytesize(private->router, strlen(fileNames[currentFile])) ){
-      printf("Error: Failed to send server file name bytesize\n");
+      logEvent("Error", "Failed to send server file name bytesize");
       return 0; 
     }
     
     if(!private->router->transmit(private->router, fileNames[currentFile], strlen(fileNames[currentFile])) ){
-      printf("Error: Failed to send server file name"); 
+      logEvent("Error", "Failed to send server file name"); 
       return 0; 
     } 
   }
@@ -325,7 +326,7 @@ static uint32_t calculateTotalRequestBytesize(char **fileNames, uint32_t fileCou
 
   
   if(*fileNames == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0; 
   }
   
@@ -343,17 +344,17 @@ static uint32_t calculateTotalRequestBytesize(char **fileNames, uint32_t fileCou
 static int hsValueSanityCheck(char *onionAddress, char *onionPort)
 {  
   if( onionPort == NULL || onionAddress == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
 
   if( strlen(onionPort) > 5 || strtol(onionPort, NULL, 10) > 65535){
-   printf("Error: Port of destination must be at or below 65535\n");
+   logEvent("Error", "Port of destination must be at or below 65535");
    return 0; 
   }
   
   if( strlen(onionAddress) != ONION_ADDRESS_BYTESIZE ){
-   printf("Error: put onion address in form abcdefghijklmnop.onion\n");
+   logEvent("Error", "Put onion address in form abcdefghijklmnop.onion");
    return 0; 
   }
   

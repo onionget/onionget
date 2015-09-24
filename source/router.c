@@ -64,7 +64,7 @@ routerObject *newRouter(void)
   //allocate memory for the object
   privateThis = (routerPrivate *) secureAllocate(sizeof(*privateThis)); 
   if(privateThis == NULL){
-    printf("Error: Failed to allocate memory for router object\n");
+    logEvent("Error", "Failed to allocate memory for router object");
     return NULL;  
   }
   
@@ -107,12 +107,12 @@ static int destroyRouter(routerObject **thisPointer)
   privateThis        = *privateThisPointer; 
     
   if(privateThis == NULL){
-    printf("Error: Something was NULL that shouldn't have been");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
   if( privateThis->socket != -1 && close(privateThis->socket) != 0 ){
-    printf("Error: Failed to close socket\n");
+    logEvent("Error", "Failed to close socket");
     return 0; 
   }
   
@@ -136,19 +136,19 @@ static dataContainerObject *receive(routerObject *this, uint32_t payloadBytesize
   
   //basic sanity checks
   if(private == NULL || this == NULL){ //this is never NULL if private is but keeping it like it is for now for readability
-    printf("Error: Something was NULL that shouldn't have been");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return NULL; 
   }
   
   if(private->socket == -1){
-    printf("Error: This router hasn't a valid socket associated with it\n");
+    logEvent("Error", "This router hasn't a valid socket associated with it");
     return NULL; 
   }
   
   //allocate the dataContainer object for the incoming message
   receivedMessage = newDataContainer(payloadBytesize);
   if(receivedMessage == NULL){
-    printf("Error: Failed to allocate data container for received messager\n");
+    logEvent("Error", "Failed to allocate data container for received messager");
     return NULL;
   }
     
@@ -157,7 +157,7 @@ static dataContainerObject *receive(routerObject *this, uint32_t payloadBytesize
     if(recvReturn == -1 || recvReturn == 0){ 
       secureFree(&receivedMessage->data, payloadBytesize);
       secureFree(receivedMessage, sizeof(*receivedMessage)); 
-      printf("Error: Failed to receive bytes\n");
+      logEvent("Error", "Failed to receive bytes");
       return NULL; 
     }     
   }
@@ -178,14 +178,14 @@ static uint32_t getIncomingBytesize(routerObject *this)
   
   //basic sanity check
   if(this == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0; 
   }
   
   //receive the number of incoming bytes, which is encoded as a uint32_t
   incomingBytesizeContainer = this->receive(this, sizeof(uint32_t));
   if(incomingBytesizeContainer == NULL){
-    printf("Error: Failed to get incoming bytesize\n");
+    logEvent("Error", "Failed to get incoming bytesize");
     return 0;  
   }
   
@@ -194,7 +194,7 @@ static uint32_t getIncomingBytesize(routerObject *this)
   
   //destroy the dataContainer holding the traffic we just received from the network
   if( !incomingBytesizeContainer->destroyDataContainer(&incomingBytesizeContainer) ){
-    printf("Error: Failed to destroy data container\n");
+    logEvent("Error", "Failed to destroy data container");
     return 0; 
   }
   
@@ -215,19 +215,19 @@ static int transmit(routerObject *this, void *payload, uint32_t payloadBytesize)
   
   //basic sanity checking
   if(private == NULL || payload == NULL || this == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
   if(private->socket == -1){
-    printf("Error: Router hasn't a socket set\n");
+    logEvent("Error", "Router hasn't a socket set");
     return 0;
   }
   
   for(sentBytes = 0, sendReturn = 0; sentBytes != payloadBytesize; sentBytes += sendReturn){
     sendReturn = send(private->socket, payload, payloadBytesize - sentBytes, 0); //TODO note not currently keeping track of payload position because it is void, think of a way around this
     if(sendReturn == -1){
-      printf("Error: Failed to send bytes\n");
+      logEvent("Error", "Failed to send bytes");
       return 0;
     } 
   }
@@ -248,12 +248,12 @@ static int transmitBytesize(routerObject *this, uint32_t bytesize)
   
   //basic sanity checking
   if(private == NULL || this == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
   if(private->socket == -1){
-    printf("Error: Router hasn't a socket set\n");
+    logEvent("Error", "Router hasn't a socket set");
     return 0; 
   }
   
@@ -262,7 +262,7 @@ static int transmitBytesize(routerObject *this, uint32_t bytesize)
   
   //transmit the bytesize over the connected socket
   if( !this->transmit(this, &bytesizeEncoded, sizeof(bytesizeEncoded)) ){
-    printf("Error: Failed to transmit bytesize\n");
+    logEvent("Error", "Failed to transmit bytesize");
     return 0; 
   }
   
@@ -283,27 +283,27 @@ static int socks5Connect(routerObject *this, char *destAddress, uint8_t destAddr
   private = (routerPrivate *)this; 
   
   if(private == NULL || destAddress == NULL || this == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
   if( private->socket == -1 ){
-    printf("Error: No socket established for router\n");
+    logEvent("Error", "No socket established for router");
     return 0; 
   }
   
   if( !initializeSocks5Protocol(this) ){
-    printf("Error: Failed to initialize socks 5 protocol\n");
+    logEvent("Error", "Failed to initialize socks 5 protocol");
     return 0;
   }
 
   if( !sendSocks5ConnectRequest(this, destAddress, destAddressBytesize, destPort) ){
-    printf("Error: Failed to send socks connection request\n");
+    logEvent("Error", "Failed to send socks connection request");
     return 0;
   }
   
   if( !socksResponseValidate(this) ){
-    printf("Error: Failed to establish socks connection\n");
+    logEvent("Error", "Failed to establish socks connection");
     return 0;    
   }
    
@@ -326,12 +326,12 @@ static int ipv4Connect(routerObject *this, char *ipv4Address, char *port)
   private = (routerPrivate *)this;
   
   if(private == NULL || this == NULL || ipv4Address == NULL || port == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
   if(private->socket != -1){
-    printf("Error: Router already in use");
+    logEvent("Error", "Router already in use");
     return 0; 
   }
   
@@ -345,27 +345,27 @@ static int ipv4Connect(routerObject *this, char *ipv4Address, char *port)
   
 
   if( !this->setSocket( this, socket(AF_INET, SOCK_STREAM, 0) ) ){
-    printf("Error: Failed to set socket\n");
+    logEvent("Error", "Failed to set socket");
     return 0;
   }
   
   if(private->socket == -1){
-    printf("Error: Failed to create new socket");
+    logEvent("Error", "Failed to create new socket");
     return 0; 
   } 
   
   if( !setSocketRecvTimeout(this, RECEIVE_WAIT_TIMEOUT_SECONDS, RECEIVE_WAIT_TIMEOUT_USECS) ){
-    printf("Error: Failed to configure socket properties\n");
+    logEvent("Error", "Failed to configure socket properties");
     return 0; 
   }
   
   if( getaddrinfo(ipv4Address, port, (const struct addrinfo*)&connectionInformation, &encodedAddress) ){
-    printf("Error: Failed to encode address\n");
+    logEvent("Error", "Failed to encode address");
     return 0; 
   }
   
   if( connect(private->socket, encodedAddress->ai_addr, encodedAddress->ai_addrlen) ){
-    printf("Error: Failed to connect to ipv4 address\n");
+    logEvent("Error", "Failed to connect to ipv4 address");
     return 0; 
   }
   
@@ -386,27 +386,27 @@ int ipv4Listen(routerObject *this, char *ipv4Address, int port)
   private                = (routerPrivate *)this;
   
   if(private == NULL || this == NULL || ipv4Address == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
   if(private->socket != -1){
-    printf("Error: Router already in use\n");
+    logEvent("Error", "Router already in use");
     return 0; 
   }
   
   if( !this->setSocket(this, socket(AF_INET, SOCK_STREAM, 0)) ){
-    printf("Error: Failed to set socket\n");
+    logEvent("Error", "Failed to set socket");
     return 0; 
   }
 
   if(private->socket == -1){
-    printf("Error: Failed to create socket\n");
+    logEvent("Error", "Failed to create socket");
     return 0; 
   }
   
   if( !inet_aton( (const char*)ipv4Address , &formattedAddress) ){
-    printf("Error: Failed to convert IP bind address to network order\n"); 
+    logEvent("Error", "Failed to convert IP bind address to network order"); 
     return 0; 
   }
   
@@ -416,12 +416,12 @@ int ipv4Listen(routerObject *this, char *ipv4Address, int port)
   
   
   if( bind(private->socket, (const struct sockaddr*) &bindInfo, sizeof(bindInfo)) ){
-    printf("Error: Failed to bind to address\n");
+    logEvent("Error", "Failed to bind to address");
     return 0; 
   }
   
   if( listen(private->socket, SOMAXCONN) ){
-    printf("Error: Failed to listen on socket\n");
+    logEvent("Error", "Failed to listen on socket");
     return 0; 
   }
   
@@ -439,12 +439,12 @@ static int getConnection(routerObject *this)
   private                = (routerPrivate *)this;
   
   if(private == NULL || this == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return -1; 
   }
   
   if(private->socket == -1){
-    printf("Error: Socket not initialized, can't accept\n");
+    logEvent("Error", "Socket not initialized, can't accept");
     return -1; 
   }
   
@@ -462,7 +462,7 @@ static int setSocket(routerObject *this, int socket)
   private                = (routerPrivate *)this;
   
   if(private == NULL || this == NULL){
-    printf("Error: Something was NULL that shouldn't have been");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
@@ -489,12 +489,12 @@ static int setSocketRecvTimeout(routerObject *this, int timeoutSecs, int timeout
   private                = (routerPrivate *)this;
   
   if(private == NULL || this == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0; 
   }
   
   if(private->socket == -1){
-    printf("Error: Router doesn't have a socket\n");
+    logEvent("Error", "Router doesn't have a socket");
     return 0; 
   }
   
@@ -503,7 +503,7 @@ static int setSocketRecvTimeout(routerObject *this, int timeoutSecs, int timeout
   recvTimeout.tv_usec = timeoutUsecs;  
   
   if( setsockopt(private->socket, SOL_SOCKET, SO_RCVTIMEO, &recvTimeout, sizeof(recvTimeout)) ){
-    printf("Error: Failed to set receive timeout on socket\n");
+    logEvent("Error", "Failed to set receive timeout on socket");
     return 0; 
   }
   
@@ -524,36 +524,36 @@ static int initializeSocks5Protocol(routerObject *this)
   dataContainerObject *proxyResponse;
   
   if(this == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
     
   // | VER | NMETHODS | METHODS |
   //socks version 5, one method, no authentication
   if( !this->transmit(this, "\005\001\000", 3) ){
-    printf("Error: Socks connection failed to transmit bytes to socks server\n");
+    logEvent("Error", "Socks connection failed to transmit bytes to socks server");
     return 0;
   }
   
   // | VER | METHOD |
   proxyResponse = this->receive(this, 2);
   if(proxyResponse == NULL){
-    printf("Error: Socks connection failed to receive response from socks server\n");
+    logEvent("Error", "Socks connection failed to receive response from socks server");
     return 0;
   }
     
   if(proxyResponse->data[0] != 5){
-    printf("Error: Proxy doesn't think it is socks 5");
+    logEvent("Error", "Proxy doesn't think it is socks 5");
     return 0; 
   }
   
   if(proxyResponse->data[1] != 0){
-    printf("Error: Proxy expects authentication");
+    logEvent("Error", "Proxy expects authentication");
     return 0; 
   }
   
   if( !proxyResponse->destroyDataContainer(&proxyResponse) ){
-    printf("Error: Failed to destroy data container\n");
+    logEvent("Error" "Failed to destroy data container");
     return 0;
   }
   
@@ -573,7 +573,7 @@ static int sendSocks5ConnectRequest(routerObject *this, char *destAddress, uint8
   dataContainerObject *socksRequest;
   
   if(this == NULL || destAddress == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0; 
   }
   
@@ -597,7 +597,7 @@ static int sendSocks5ConnectRequest(routerObject *this, char *destAddress, uint8
 
   socksRequest = newDataContainer(requestBytesize);
   if(socksRequest == NULL){
-    printf("Error: Failed to create data container for socks request\n");
+    logEvent("Error", "Failed to create data container for socks request");
     return 0;
   }
     
@@ -612,12 +612,12 @@ static int sendSocks5ConnectRequest(routerObject *this, char *destAddress, uint8
   
   
   if( !this->transmit(this, socksRequest->data, requestBytesize) ){
-    printf("Error: Failed to transmit message to socks server\n");
+    logEvent("Error", "Failed to transmit message to socks server");
     return 0;
   }
   
   if( !socksRequest->destroyDataContainer(&socksRequest) ){
-    printf("Error: Failed to destroy data container\n");
+    logEvent("Error", "Failed to destroy data container");
     return 0; 
   }
   
@@ -637,7 +637,7 @@ static int socksResponseValidate(routerObject *this)
   dataContainerObject *proxyResponse;
   
   if(this == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0; 
   }
   
@@ -651,22 +651,22 @@ static int socksResponseValidate(routerObject *this)
   */
   proxyResponse = this->receive(this, 10);
   if(proxyResponse == NULL){
-    printf("Error: Failed to establish Socks connection\n");
+    logEvent("Error", "Failed to establish Socks connection");
     return 0; 
   }
     
   if(proxyResponse->data[0] != 5){
-    printf("Error: Socks server doesn't think it is version 5");
+    logEvent("Error", "Socks server doesn't think it is version 5");
     return 0; 
   }
   
   if(proxyResponse->data[1] != 0){
-    printf("Error: Connection failed");
+    logEvent("Error", "Connection failed");
     return 0; 
   }
   
   if( !proxyResponse->destroyDataContainer(&proxyResponse) ){
-    printf("Error: Failed to destroy datacontainer\n");
+    logEvent("Error", "Failed to destroy datacontainer");
     return 0;
   }
   

@@ -6,6 +6,7 @@
 #include "memoryManager.h"
 #include "router.h"
 #include "ogEnums.h"
+#include "macros.h"
 
 typedef struct routerBankPrivate{
   routerBankObject   publicRouterBank; 
@@ -21,7 +22,7 @@ routerBankObject *newRouterBank(void)
   //allocate memory for object
   privateThis = (routerBankPrivate *)secureAllocate(sizeof(*privateThis));   
   if(privateThis == NULL){
-    printf("Error: Failed to allocate memory for router bank object\n");
+    logEvent("Error", "Failed to allocate memory for router bank object");
     return NULL; 
   }
   
@@ -44,13 +45,13 @@ static int depositRouterObject(routerBankObject *this, routerObject *router)
   private = (routerBankPrivate *)this; 
   
   if(private == NULL || this == NULL || router == NULL || private->routerObjects == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0; 
   }
   
   
   if( !private->routerObjects->insert(private->routerObjects, DLL_TAIL, router) ){
-    printf("Error: Failed to generate a new router object\n");
+    logEvent("Error", "Failed to generate a new router object");
     return 0; 
   }
   

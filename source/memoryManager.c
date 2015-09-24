@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "memoryManager.h"
+#include "macros.h"
 
 static int memoryClear(volatile unsigned char *memoryPointerV, size_t bytesize);
 
@@ -14,14 +15,14 @@ void *secureAllocate(size_t bytesize)
   void *memory;
   
   if(bytesize == 0){
-    printf("Error: Cannot allocate 0 bytes of memory\n");
+    logEvent("Error", "Cannot allocate 0 bytes of memory");
     return NULL; 
   }
   
   memory = calloc(1, bytesize);
   
   if( memory == NULL ){
-    printf("Error: Failed to allocate memory!\n");
+    logEvent("Error", "Failed to allocate memory!");
     return NULL; 
   }
   
@@ -41,7 +42,7 @@ static int memoryClear(void *memoryPointerV, size_t bytesize)
   volatile unsigned char *memoryPointer = NULL;
   
   if(memoryPointerV == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0; 
   }
   
@@ -78,12 +79,12 @@ int secureFree(void *memory, size_t bytesize)
   
   //basic sanity checks
   if(*memoryCorrectCast == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
   if(bytesize == 0){
-    printf("Error: Zero bytes of memory is invalid\n");
+    logEvent("Error", "Zero bytes of memory is invalid");
     return 0;
   }
 
@@ -92,7 +93,7 @@ int secureFree(void *memory, size_t bytesize)
     
   //clear memory buffer, volatile pointer in compliance with MEM03-C
   if( !memoryClear(dataBuffer, bytesize) ){
-    printf("Error: Failed to clear memory buffer\n");
+    logEvent("Error", "Failed to clear memory buffer");
     return 0;
   }
 

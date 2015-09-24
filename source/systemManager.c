@@ -9,7 +9,7 @@
 #include <sys/stat.h>
 
 #include "systemManager.h"
-
+#include "macros.h" 
 
 static int enableCapability(cap_value_t *capability, cap_flag_t flag);
 static int disableCapability(cap_value_t *capability, cap_flag_t flag);
@@ -83,27 +83,27 @@ static int setCapability(cap_value_t *capability, cap_flag_t flag, cap_flag_valu
   //get the current process capabilities
   currentCapabilities = cap_get_proc();
   if(currentCapabilities == NULL){
-    printf("Error: Failed to determine current process capabilities\n");
+    logEvent("Error", "Failed to determine current process capabilities");
     return 0; 
   }
   
   //add the new process capability to the list of current process capabilities
   if (cap_set_flag(currentCapabilities, flag, 1, capability, value) == -1){
-    printf("Error: Failed to add new process capabilities to the list of process capabilities\n");
+    logEvent("Error", "Failed to add new process capabilities to the list of process capabilities");
     cap_free(currentCapabilities);
     return 0;
   }
   
   //set the process to use the new capability
   if( cap_set_proc(currentCapabilities) == -1 ){
-    printf("Error: Failed to set the process to use required new capabilities\n");
+    logEvent("Error", "Failed to set the process to use required new capabilities");
     cap_free(currentCapabilities);
     return 0; 
   }
   
     //clean up 
   if( cap_free(currentCapabilities) == -1 ){
-    printf("Error: Failed to free memory associated with process capabilities\n");
+    logEvent("Error", "Failed to free memory associated with process capabilities");
     return 0; 
   }
   
@@ -124,18 +124,18 @@ int enableMlock(void)
   static int alreadyCalled  = 0;
   
   if(alreadyCalled){
-    printf("Error: You can only enable mlock once per process\n");
+    logEvent("Error", "You can only enable mlock once per process");
     return 0; 
   }
   
   //make sure the capability of CAP_IPC_LOCK is available (required for mlock) 
   if( !CAP_IS_SUPPORTED(CAP_IPC_LOCK) ){
-    printf("Error: Mlock capability [CAP_IPC_LOCK] isn't set on binary\n");
+    logEvent("Error", "Mlock capability [CAP_IPC_LOCK] isn't set on binary");
     return 0; 
   }
   
   if( !enableCapability(capability, CAP_EFFECTIVE) ){
-    printf("Error: Failed to make process chroot capable\n");
+    logEvent("Error", "Failed to make process chroot capable");
     return 0; 
   }
   
@@ -153,7 +153,7 @@ int disableMlock(void)
   cap_value_t capability[1] = {CAP_IPC_LOCK};
   
   if( !disableCapability(capability, CAP_EFFECTIVE) ){
-    printf("Error: Failed to diable mLock capability\n");
+    logEvent("Error", "Failed to diable mLock capability");
     return 0;
   }
   
@@ -173,18 +173,18 @@ int disableMlock(void)
 int isolateFs(const char *jailPath)
 {
   if( !enableIsolateFs() ){
-    printf("Error: Failed to enable the ability to isolate the filesystem with chroot\n");
+    logEvent("Error", "Failed to enable the ability to isolate the filesystem with chroot");
     return 0; 
   }
   
   //initialize the chroot jail, chdir to chroot in compliance with POS05-C / FIO16-C
   if( chroot(jailPath) == -1 || chdir("/") == -1 ){
-    printf("Error: Failed to isolate file system!\n");
+    logEvent("Error", "Failed to isolate file system!");
     return 0; 
   }
   
   if( !disableIsolateFs() ){
-    printf("Error: Failed to disable the ability to isolate the filesystem with chroot\n");
+    logEvent("Error", "Failed to disable the ability to isolate the filesystem with chroot");
     return 0; 
   }
   
@@ -202,18 +202,18 @@ static int enableIsolateFs(void)
   static int  alreadyCalled = 0;
   
   if(alreadyCalled){
-    printf("Error: You can only enable isolate Fs once per process\n");
+    logEvent("Error", "You can only enable isolate Fs once per process");
     return 0; 
   }
     
   //make sure that the capability of chroot is available
   if( !CAP_IS_SUPPORTED(CAP_SYS_CHROOT) ){
-    printf("Error: Chroot capability [CAP_SYS_CHROOT] isn't set on binary\n");
+    logEvent("Error", "Chroot capability [CAP_SYS_CHROOT] isn't set on binary");
     return 0; 
   }
   
   if( !enableCapability(capability, CAP_EFFECTIVE) ){
-    printf("Error: Failed to make process chroot capable\n");
+    logEvent("Error", "Failed to make process chroot capable");
     return 0; 
   }
   
@@ -232,7 +232,7 @@ static int disableIsolateFs(void)
   cap_value_t capability[1] = {CAP_SYS_CHROOT};
     
   if( !disableCapability(capability, CAP_EFFECTIVE) ){
-    printf("Error: Failed to disable chroot property\n");
+    logEvent("Error", "Failed to disable chroot property");
     return 0; 
   }
   

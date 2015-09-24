@@ -29,7 +29,7 @@ dllObject* newDll(void)
   
   this = (dllObject *)secureAllocate(sizeof(*this));
   if(this == NULL){
-    printf("Error: Failed to allocate memory for linked list\n");
+    logEvent("Error", "Failed to allocate memory for linked list");
     return NULL; 
   }
   
@@ -58,19 +58,19 @@ static int insert(dllObject *this, int end, void *memberData)
   
   //first some sanity checking
   if(this == NULL || memberData == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0; 
   }
 
   if(end != DLL_HEAD && end != DLL_TAIL){
-    printf("Error: end must be DLL_HEAD or DLL_TAIL\n");
+    logEvent("Error", "end must be DLL_HEAD or DLL_TAIL");
     return 0; 
   }
   
   //sanity checks passed so allocate a new member
   member = newDllMember(memberData);
   if(member == NULL){
-    printf("Error: Failed to create dll member\n");
+    logEvent("Error", "Failed to create dll member");
     return 0;
   }
 
@@ -84,7 +84,7 @@ static int insert(dllObject *this, int end, void *memberData)
   
   if(!insertSuccess){
     secureFree(&member, sizeof(*member)); 
-    printf("Error: Failed to insert member into list\n");
+    logEvent("Error", "Failed to insert member into list");
     return 0; 
   }
   
@@ -107,7 +107,7 @@ static dllMember *newDllMember(void *memberData)
   //allocate the dllObject 
   member = (dllMember *)secureAllocate(sizeof(*member));
   if(member == NULL){
-    printf("Error: Failed to allocate memory for linked list member\n");
+    logEvent("Error", "Failed to allocate memory for linked list member");
     return NULL;
   }
   
@@ -123,7 +123,7 @@ static dllMember *newDllMember(void *memberData)
 static inline int insertInitial(dllObject *this, dllMember *member)
 {
   if(this == NULL || member == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
@@ -141,7 +141,7 @@ static inline int insertInitial(dllObject *this, dllMember *member)
 static inline int insertHead(dllObject *this, dllMember *member)
 {
   if(this == NULL || member == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
@@ -159,7 +159,7 @@ static inline int insertHead(dllObject *this, dllMember *member)
 static inline int insertTail(dllObject *this, dllMember *member)
 {
   if(this == NULL || member == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   

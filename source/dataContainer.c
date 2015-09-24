@@ -5,6 +5,7 @@
 
 #include "dataContainer.h"
 #include "memoryManager.h"
+#include "macros.h"
 
 static int destroyDataContainer(dataContainerObject **thisPointer);
 
@@ -26,14 +27,14 @@ dataContainerObject *newDataContainer(size_t bytesize)
   //allocate memory for data container
   this = (dataContainerObject*)secureAllocate(sizeof(*this));
   if(this == NULL){
-    printf("Error: Failed to allocate memory for data container\n");
+    logEvent("Error", "Failed to allocate memory for data container");
     return NULL; 
   }
   
   //set properties
   this->data = (char*) secureAllocate(bytesize);
   if(this->data == NULL){
-    printf("Error: Failed to allocate memory for data\n");
+    logEvent("Error", "Failed to allocate memory for data");
     secureFree(&this, sizeof(*this));
     return NULL; 
   }
@@ -58,21 +59,21 @@ static int destroyDataContainer(dataContainerObject **thisPointer)
   this = *thisPointer;   
   
   if(this == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
   //if the data pointer isn't pointed to NULL then securely free it
   if( this->data != NULL ){
     if(!secureFree( &(this->data), this->bytesize ) ){
-      printf("Error: Failed to free dataContainer data\n");
+      logEvent("Error", "Failed to free dataContainer data");
       return 0;      
     }
   }
   
   //securely free the object memory
   if( !secureFree(thisPointer, sizeof(**thisPointer)) ){
-    printf("Error: Failed to free data container object\n");
+    logEvent("Error", "Failed to free data container object");
     return 0; 
   }
   

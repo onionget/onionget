@@ -40,7 +40,7 @@ static dataContainerObject *getFile(fileBankObject this, char *id, uint32_t idBy
   dllMember *currentMember;
   
   if(this == NULL || id == NULL){
-    printf("Error: Something was NULL that shouldn't have been\n");
+    logEvent("Error", "Something was NULL that shouldn't have been");
     return NULL; 
   }
   
