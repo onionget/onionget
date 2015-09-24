@@ -7,7 +7,7 @@ static char *getTimeInString(void);
 
 
 /*** For logging macro ***/ 
-//TODO time function was acting very weird when it was in the ogLogMacroBackEnd function, this warrants looking into
+//TODO time function internals were acting very weird when they were in the ogLogMacroBackEnd function, this warrants looking into
 
 //never call this directly but always with macro logEvent(category, message) 
 void ogLogMacroBackEnd(char *category, char *message, char *filename, unsigned int lineNumber) 
@@ -25,7 +25,7 @@ void ogLogMacroBackEnd(char *category, char *message, char *filename, unsigned i
 
 
 //returns string from ctime function or NULL on error
-static char *getTimeInString()
+static char *getTimeInString(void)
 {
   time_t timeInSeconds;
   char   *timeInString;

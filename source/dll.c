@@ -2,11 +2,29 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <pthread.h>
+
 #include "dataContainer.h"
 #include "dll.h"
 #include "memoryManager.h"
 #include "ogEnums.h"
 
+
+
+typedef struct dllMember
+{
+  struct dllMember   *previous;
+  struct dllMember   *next;
+  void               *memberData; 
+}dllMember;
+
+
+typedef struct dllPrivate{
+  dllObject        publicDll; 
+  struct dllMember *head;
+  struct dllMember *tail;
+  uint32_t         count; 
+}dllPrivate;
 
 //public methods
 static int       insert(dllObject *this, int end, void *memberData);
@@ -25,22 +43,21 @@ static dllMember *newDllMember(void *memberPointer);
  */
 dllObject* newDll(void)
 {
-  dllObject *this;
+  dllPrivate *privateThis = NULL;
   
-  this = (dllObject *)secureAllocate(sizeof(*this));
-  if(this == NULL){
+  privateThis = (dllprivate *)secureAllocate(sizeof(*privateThis));
+  if(privateThis == NULL){
     logEvent("Error", "Failed to allocate memory for linked list");
     return NULL; 
   }
   
-  this->head     = NULL; 
-  this->tail     = NULL;
+  privateThis->head   = NULL; 
+  privateThis->tail   = NULL;
+  privateThis->count  = 0; 
   
-  this->count = 0; 
+  privateThis->publicDll.insert = &insert; 
   
-  this->insert  = &insert;
-  
-  return this;
+  return (dllObject *)privateThis;
 }
 
 
@@ -53,14 +70,17 @@ dllObject* newDll(void)
  */
 static int insert(dllObject *this, int end, void *memberData)
 {
-  dllMember  *member;
-  int        insertSuccess;
+  dllPrivate *private      = NULL 
+  dllMember  *member       = NULL;
+  int        insertSuccess = 0;
   
   //first some sanity checking
   if(this == NULL || memberData == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
     return 0; 
   }
+  
+  private = (dllPrivate *)this;
 
   if(end != DLL_HEAD && end != DLL_TAIL){
     logEvent("Error", "end must be DLL_HEAD or DLL_TAIL");
@@ -78,9 +98,9 @@ static int insert(dllObject *this, int end, void *memberData)
   //insert the item into the list according to the end specified 
   insertSuccess = 0; 
   
-  if      ( this->head == NULL     )  insertSuccess = insertInitial ( this , member ); 
-  else if ( end        == DLL_HEAD )  insertSuccess = insertHead    ( this , member );
-  else if ( end        == DLL_TAIL )  insertSuccess = insertTail    ( this , member ); 
+  if      ( private->head == NULL     )  insertSuccess = insertInitial ( this , member ); 
+  else if ( end           == DLL_HEAD )  insertSuccess = insertHead    ( this , member );
+  else if ( end           == DLL_TAIL )  insertSuccess = insertTail    ( this , member ); 
   
   if(!insertSuccess){
     secureFree(&member, sizeof(*member)); 
@@ -89,7 +109,7 @@ static int insert(dllObject *this, int end, void *memberData)
   }
   
   //keep track of the total bytesize of the linked list
-  this->count += 1;
+  private->count += 1;
   
   return 1; 
 }
@@ -112,7 +132,6 @@ static dllMember *newDllMember(void *memberData)
   }
   
   member->memberData    = memberData; 
-  member->locked        = 0; 
   
   return member;
 }
@@ -122,15 +141,19 @@ static dllMember *newDllMember(void *memberData)
  */
 static inline int insertInitial(dllObject *this, dllMember *member)
 {
+  privateDll *private = NULL;
+  
   if(this == NULL || member == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
-  this->head       = member;
-  this->tail       = member;
-  member->next     = NULL;
-  member->previous = NULL;    
+  private = (dllPrivate *)this;
+  
+  private->head       = member;
+  private->tail       = member;
+  member->next        = NULL;
+  member->previous    = NULL;    
   
   return 1;
 }
@@ -140,15 +163,19 @@ static inline int insertInitial(dllObject *this, dllMember *member)
  */
 static inline int insertHead(dllObject *this, dllMember *member)
 {
+  privateDll *private = NULL;
+  
   if(this == NULL || member == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
-  this->head->previous = member;
-  member->next         = this->head;
-  member->previous     = NULL;
-  this->head           = member;
+  private = (dllPrivate *)this;
+  
+  private->head->previous = member;
+  member->next            = private->head;
+  member->previous        = NULL;
+  private->head           = member;
   
   return 1;
 }
@@ -158,16 +185,19 @@ static inline int insertHead(dllObject *this, dllMember *member)
  */
 static inline int insertTail(dllObject *this, dllMember *member)
 {
+  privateDll *private = NULL;
+  
   if(this == NULL || member == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
+  private = (dllPrivate *)this;
 
-  this->tail->next = member;
-  member->previous = this->tail;
-  member->next     = NULL;
-  this->tail       = member;
+  private->tail->next = member;
+  member->previous    = private->tail;
+  member->next        = NULL;
+  private->tail       = member;
  
   return 1;
 }
