@@ -3,8 +3,8 @@
 #include "dll.h"
 
 typedef struct routerBankObject{
-  int          (*depositRouterObject)(struct routerBankObject *this, routerObject *router)
-  routerObject *(*withdrawRouterObject)(struct routerBankObject *this);
+  int          (*deposit)(struct routerBankObject *this, routerObject *router)
+  routerObject *(*withdraw)(struct routerBankObject *this);
 }routerBankObject;
 
-routerBankObject *newRouterBank(void);
+routerBankObject *newRouterBank(uint32_t slots);
