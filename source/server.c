@@ -22,10 +22,9 @@
  */
 
 
-static   fileBankObject     *globalFileBank         = NULL;
-static   connectionObject   **globalConnectionBank  = NULL;
-uint32_t maxConnections                             = 0; 
-static   routerObject       *globalServerRouter     = NULL;
+static   fileBankObject        *globalFileBank         = NULL;
+static   connectionBankObect   *globalConnectionBank  = NULL;
+static   routerObject          *globalServerRouter     = NULL;
 
 
 
@@ -257,9 +256,9 @@ static uint32_t sendNextRequestedFile(connectionObject *connection)
   }
   
   //TODO do a read and send loop here like client does receive and write loop TODO TODO TODO
-  //have diskFile have cache of itself in RAM starting from byte 0 to byte X, and dfRead can check if the offset is cached or if it needs to get it from RAM 
+  //have diskFile have cache of itself in RAM starting from byte 0 to byte X, and dfRead can check if the offset is cached or if it needs to get it from disk 
   
-  //static int *dfRead(diskFileObject *this, uint32_t bytesToRead, uint32_t readOffset)
+  //static int *dfRead(diskFileObject *this, void** outBuffer, uint32_t bytesToRead, uint32_t readOffset)
   
   outgoingFile->dfRead(outgoingFile, ); //TODO finish this
   
