@@ -11,19 +11,36 @@
 #include "router.h"
 #include "dll.h"
 #include "memoryManager.h"
+#include "connectionBank.h"
+#include "connection.h"
 #include "diskFile.h"
 #include "server.h"
 #include "ogEnums.h"
 #include "macros.h"
 
-static void *processConnection(void *connectionObjectV);
+/*
+ * Server follows singleton paradigm for now
+ */
+
+
+static FileBankObject     *globalFileBank        = NULL;
+static routerBankObject   *globalConnectionBank  = NULL;
+static routerObject       *globalServerRouter    = NULL;
+
+
+
+
+static void *processConnection(void *connectionV);
 int prepareSharedFiles(serverObject *this);
-static int serverListen(serverObject *this);
+static int initializeConnectionProcessing(serverObject *this);
 
 
 static int sendFileNotFound(connectionObject *connection);
-static int sendNextRequestedFile(connectionObject *connection);
-static dataContainerObject *getRequestedFilename(connectionObject *connection);
+static uint32_t sendNextRequestedFile(connectionObject *connection);
+
+
+
+//singleton 
 
 //0         1               2               3                    4
 //[exe] [server address] [server port] [shared folder path] [memory cache megabyte size (max 4294)] 
@@ -38,64 +55,64 @@ static dataContainerObject *getRequestedFilename(connectionObject *connection);
  * 
  * returns pointer to server object on success, pointer to NULL on error
  */
-serverObject *newServer(char *sharedFolderPath, char *bindAddress, int listenPort, uint16_t maxMemoryCacheMegabytes)
+
+uint32_t maxMemoryCacheMegabytes, uint32_t maxSharedFiles, char *sharedFolderPath;
+
+
+serverObject *newServer(void) //TODO NOTE: Intrinsic differences between routerBank and fileBank make them perhaps not suited for the same back end, however for now they will use it...
 {
-  serverObject *this; 
-    
-  if(sharedFolderPath == NULL || bindAddress == NULL){
-    logEvent("Error", "Something was NULL that shouldn't have been");
-    return NULL;
-  }
   
-  this = (serverObject *)secureAllocate(sizeof(*this));
+  serverObject *this = (serverObject *)secureAllocate(sizeof(*this));
   if(this == NULL){ 
     logEvent("Error", "Failed to allocate memory to instantiate server");
     return NULL; 
   }
   
   
-  //simple unsigned integer wrap protection, limits cache to slightly over four gigabytes
-  if(maxMemoryCacheMegabytes > UINT32_MAX / BYTES_IN_A_MEGABYTE){
-    logEvent("Error", "maximum cache megabyte size supported is (UINT32_MAX / BYTES_IN_A_MEGABYTE), as cache is internally stored in bytes in a uint32_t");   
-    return NULL; 
-  }
-  else{
-    this->maxMemoryCacheBytesize = maxMemoryCacheMegabytes * BYTES_IN_A_MEGABYTE;
-  }
-   
-  this->sharedFolderPath         = sharedFolderPath;
-  this->sharedFolderPathBytesize = strlen(this->sharedFolderPath); 
-  this->bindAddress              = bindAddress;
-  this->listenPort               = listenPort;
-  
-  
-  this->cachedSharedFiles = newDll();
-  if(this->cachedSharedFiles == NULL){
-    logEvent("Error", "Failed to create cached file linked list, server instantiation failed");
-    return NULL; 
-  }
-  
-  this->listeningRouter = newRouter();
-  if(this->listeningRouter == NULL){
-    logEvent("Error", "Failed to create router object, server instantiation failed");
-    return NULL; 
-  }
-  
-  
+
   //initialize public methods
-  this->serverListen = &serverListen; 
+  this->initialize = &initialize; 
   
-  if( !prepareSharedFiles(this) ){
-    logEvent("Error", "Failed to cache shared files!");
-    return NULL; 
-  }
+  this->initializeConnectionProccessing    = &initializeConnectionProcessing; 
+  this->initializeFileCache                = &prepareSharedFiles;
+  this->initializeNetworking               = &initializeNetworking; 
   
-  if( !this->listeningRouter->ipv4Listen(this->listeningRouter, this->bindAddress, this->listenPort) ){
-    logEvent("Error", "Failed to set server in a listening state");
-    return NULL; 
-  }
-  
+   
   return this;
+}
+
+
+
+
+//TODO consider dependency injecting router and connection bank etc (TODO just dependency inject all of this from controller and do sanity check there, but for now put it here) 
+static int initializeNetworking(char *bindAddress, int listenPort, uint32_t connectionSlots)
+{
+  if(bindAddress == NULL){
+    logEvent("Error", "Something was NULL that shouldn't have been");
+    return 0;
+  }
+  
+  if( strlen(listenPort) > 5 || strtol(listenPort, NULL, 10) > HIGHEST_VALID_PORT){
+   logEvent("Error", "Listen port must be at or below 65535");
+   return 0; 
+  }
+  
+  if( strlen(bindAddress) > strlen("111.111.111.111")){
+    logEvent("Error", "Bind address invalid length");
+    return 0;
+  }
+  
+  //BRO DO YOU EVEN DEPENDENCY INJECT?
+  globalServerRouter   = newRouter();
+  globalConnectionBank = newConnectionBank();
+  while(connectionSlots--) globalConnectionBank->deposit(newConnection()); 
+  
+  if( !globalServerRouter->ipv4Listen( globalServerRouter, bindAddress, listenPort )){
+    logEvent("Error", "Failed to set server in a listening state");
+    return 0; 
+  }
+  
+  return 1; 
 }
 
 
@@ -105,40 +122,30 @@ serverObject *newServer(char *sharedFolderPath, char *bindAddress, int listenPor
 /************ PUBLIC METHODS *************/
 
 //returns 0 on error, otherwise doesn't return
-static int serverListen(serverObject *this)
+static int initializeConnectionProcessing(void)
 {
   pthread_t        processingThread;
-  connectionObject *connection;
+  connectionObject *availableConnection; 
   
-  if(this == NULL){
-    logEvent("Error", "Something was NULL that shouldn't have been");
+  if(globalServerRouter == NULL){
+    logEvent("Error", "Global server router must be initialized prior to connection processing");
     return 0;
   }
   
-  while(1){  
-    //create a connection object 
-    connection = newActiveConnection(this);
-    if(connection == NULL){
-      logEvent("Error", "server failed to new a connection object (probably because this was NULL)");
-      return 0;
-    }
-    
-    //block until a connecting client uses the connection object 
-    if( !connection->router->setSocket( connection->router, this->listeningRouter->getConnection(this->listeningRouter) ) ){
-      logEvent("Error", "Failed to set active connection router socket");
-      return 0;
-    }
-    
-    if( pthread_create(&processingThread, NULL, processConnection, (void*)connection) != 0 ){     
-      if( !connection->router->destroyRouter(&connection->router) ){
-	logEvent("Error", "Failed to destroy router object");
-	return 0;	
+  while(1){     
+    //keep trying to get an available connection
+    while( !(availableConnection = globalConnectionBank->withdraw(globalConnectionBank)) ){ //NOTE wtf I don't think I actually need a mutex on withdraw only one thread accesses it
+      //block until a connecting client needs the available router (TODO make sure globalServerRouter doesn't need error checking...)
+      if( !availableConnection->router->setSocket(availableConnection->router, globalServerRouter->getConnection(globalServerRouter)) ){
+	logEvent("Error", "Failed to set connection socket");
+	return 0; //TODO don't want to return here add better error handling 
       }
-     
-      if( !secureFree(&connection, sizeof(*connection)) ){
-        logEvent("Error", "Failed to free connectionObject object");
-        return 0;
+      
+      if( pthread_create(&processingThread, NULL, processConnection, (void*)availableConnection) != 0 ){
+	logEvent("Error", "Failed to create thread to handle connection");
+	return 0; //TODO don't want to return here add better error handling
       }
+      
     }
   }
   
@@ -152,67 +159,58 @@ static int serverListen(serverObject *this)
 
 /****************** PRIVATE METHODS *******************/
 
-
 static void *processConnection(void *connectionV)
 {
-  connectionObject *connection;
-  uint32_t         totalBytesize;
-  uint32_t         filenameBytesize; 
+  connectionObject *connection           = NULL; 
+  uint32_t         requestBytesize       = 0;
+  uint32_t         requestBytesProcessed = 0; 
   
-  //give the connectionV the correct cast
-  connection = (connectionObject*)connectionV;
+  //cast correctly the connection
+  connection = (connectionObject *)connectionV;  
   
   //basic sanity checking
-  if( connection == NULL || connection->router == NULL || connection->server == NULL ){
+  if( connection == NULL ){
     logEvent("Error", "Something was NULL that shouldn't have been");
-    goto cleanup; 
+    return NULL; 
   }
   
   //get the total incoming bytesize, perform basic sanity check
-  totalBytesize = connection->router->getIncomingBytesize(connection->router); 
-  if(totalBytesize > MAX_REQUEST_STRING_BYTESIZE || totalBytesize == 0){
-    logEvent("Error", "Client wants to send more bytes than allowed, or error in getting total request bytesize");
+  requestBytesize = connection->router->getIncomingBytesize(connection->router); 
+  if(requestBytesize > MAX_REQUEST_STRING_BYTESIZE || requestBytesize == 0){
+    logEvent("Error", "Client wants to send more bytes than allowed, or error in getting total request bytesize"); //TODO better error checking soon to come! stay tuned! 
     goto cleanup; 
   }
   
   //send all the requested files
-  for(filenameBytesize = 0; totalBytesize > 0; totalBytesize -= filenameBytesize + sizeof(uint32_t)){ 
-    filenameBytesize = sendNextRequestedFile(connection);
+  for(requestBytesProcessed = 0; requestBytesize > 0; requestBytesize -= requestBytesProcessed + sizeof(uint32_t)){ //+ sizeof(uint32_t) because requestBytesize includes the uint32_t seperators between file names requested
+    requestBytesProcessed = sendNextRequestedFile(connection);
     
     //should we check for this?
-    if(totalBytesize - filenameBytesize < 0){
+    if(requestBytesize - requestBytesProcessed < 0){
       logEvent("Error", "Client sent more bytes than it said it was going to");
       goto cleanup; 
     }
     
-    if(filenameBytesize == -1){
+    if(requestBytesProcessed == -1){
       logEvent("Error", "Failed to send file to client");
       goto cleanup;  
     }
   }
     
   cleanup:  
-    if(connection != NULL && !connection->destroyConnectionObject(&connection)) logEvent("Error", "Failed to destroy active connection object"); 
+    if( !connection->reinitialize(connection) ){
+      logEvent("Error", "Failed to reinitialize connection");
+      return NULL; 
+    }
+       
+    globalConnectionBank->deposit(connection); 
     return NULL;  
 }
   
-//returns pointer to NULL on error   
-static dataContainerObject *getRequestedFilename(connectionObject *connection)
-{
-  uint32_t fileIdBytesize;
-  
-  fileIdBytesize = connection->router->getIncomingBytesize(connection->router); 
-  if(fileIdBytesize > MAX_FILE_ID_BYTESIZE || fileIdBytesize == 0){
-   return NULL;  
-  }
-        
-  return connection->router->receive(connection->router, fileIdBytesize);  
-}
   
 //returns bytesize of sent filename (or -1 on error); 
-static int sendNextRequestedFile(connectionObject *connection)
+static uint32_t sendNextRequestedFile(connectionObject *connection)
 {
-  dataContainerObject *currentFilename = NULL; 
   dataContainerObject *outgoingFile    = NULL; 
   uint32_t            filenameBytesize = 0;
   
@@ -221,17 +219,26 @@ static int sendNextRequestedFile(connectionObject *connection)
     goto error; 
   }
   
-  currentFilename = getRequestedFilename(connection); 
-  if(currentFilename == NULL){
-   logEvent("Error", "Failed to get file ID from client");
-   goto error; 
+  //get the requested file name bytesize
+  filenameBytesize = connection->router->getIncomingBytesize(connection->router); 
+  
+  //WARNING the assumption that MAX_FILE_ID_BYTESIZE is exact size of buffer connection->requestedFilename must hold true for security to be present
+  if(filenameBytesize > MAX_FILE_ID_BYTESIZE || filenameBytesize == 0){ 
+   return 0;  
   }
   
+  //initialize filename
+  if( !connection->router->receive(connection->router, connection->requestedFilename, filenameBytesize) ){
+    logEvent("Error", "Failed to determine requested file name");
+    return 0;
+  }
+     
   /*
-  //NOTE that we don't want to destroy this because it is a pointer to the file on the cache linked list (or NULL if it isn't on it)
-  //NOTE TODO stop getting cachedSharedFiles from connection object (which is obsoleted) and rather use static file global heap variable 
-  outgoingFile = connection->server->cachedSharedFiles->getId(connection->server->cachedSharedFiles, currentFilename->data, currentFilename->bytesize);
+  //NOTE that we don't want to destroy this because it is a pointer to the file on the cache linked list (or NULL if it isn't on it) (TODO think about this, depends on implementation) 
+  TODO TODO TODO 
   */
+  outgoingFile = globalFileBank->withdrawById(connection->requestedFilename, filenameBytesize); //TODO this needs to be implemented NOTE that we must never rely on strlen for anything always know sizes refactor out all strlens
+  
   
   if(!outgoingFile && !sendFileNotFound(connection)){
     logEvent("Error", "Failed to send file not found to client");
@@ -248,15 +255,12 @@ static int sendNextRequestedFile(connectionObject *connection)
     goto error; 
   }
   
-
-  filenameBytesize = currentFilename->bytesize; 
-  currentFilename->destroyDataContainer(&currentFilename);
   return filenameBytesize; 
   
   error:
-   if(currentFilename != NULL) currentFilename->destroyDataContainer(&currentFilename);
    return -1; 
 }
+  
   
   
 static int sendFileNotFound(connectionObject *connection)
@@ -281,6 +285,19 @@ int prepareSharedFiles(serverObject *this)
   struct dirent       *fileEntry; 
   diskFileObject      *diskFile; 
   long                currentFileBytesize; 
+  
+  
+  /*
+   * 
+   *   //simple unsigned integer wrap protection, limits cache to slightly over four gigabytes
+  if(maxMemoryCacheMegabytes > UINT32_MAX / BYTES_IN_A_MEGABYTE){
+    logEvent("Error", "maximum cache megabyte size supported is (UINT32_MAX / BYTES_IN_A_MEGABYTE), as cache is internally stored in bytes in a uint32_t");   
+    return NULL; 
+  }
+  else{
+    privateThis->maxMemoryCacheBytesize = maxMemoryCacheMegabytes * BYTES_IN_A_MEGABYTE;
+  }
+   */
   
   if(this == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");

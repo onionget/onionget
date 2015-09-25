@@ -156,16 +156,8 @@ static int serverSanityCheck(int argc, char *bindAddress, char *listenPort)
     logEvent("Error", "Invalid number of arguments for server");
     return 0; 
   }
-  
-  if( strlen(listenPort) > 5 || strtol(listenPort, NULL, 10) > HIGHEST_VALID_PORT){
-   logEvent("Error", "Listen port must be at or below 65535");
-   return 0; 
-  }
-  
-  if( strlen(bindAddress) > strlen("111.111.111.111")){
-    logEvent("Error", "Bind address invalid length");
-    return 0;
-  }
+
+  //note moved other checks (bindaddress and listen port) to server.c TODO clean up
   
   return 1;
 }

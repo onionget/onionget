@@ -22,7 +22,7 @@ typedef struct diskFilePrivate{
 
 
 //PUBLIC METHODS
-static uint32_t              dfWrite(diskFileObject *this, dataContainerObject *dataContainer, uint32_t writeOffset); 
+static uint32_t              dfWrite(diskFileObject *this, void *dataBuffer, size_t bytesize, uint32_t writeOffset); 
 static dataContainerObject   *dfRead(diskFileObject *this, uint32_t bytesToRead, uint32_t readOffset);
 static int                   closeTearDown(diskFileObject **thisPointer);
 static long                  dfBytesize(diskFileObject *this);
@@ -162,27 +162,24 @@ static int closeTearDown(diskFileObject **thisPointer)
 /*
  * dfWrite returns 0 on error and bytes written on success
  */
-static uint32_t dfWrite(diskFileObject *this, dataContainerObject *dataContainer, uint32_t writeOffset) 
+static uint32_t dfWrite(diskFileObject *this, void *dataBuffer, size_t bytesize, uint32_t writeOffset) 
 {    
   int             fid            = 0; 
   void            *mappedMemory  = NULL;
-  uint32_t        bytesToWrite   = 0;
   diskFilePrivate *private       = NULL;
   
   private = (diskFilePrivate *)this; 
   
-  if(private == NULL || this == NULL || dataContainer == NULL){
+  if(private == NULL || this == NULL || dataBuffer == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
-  if(dataContainer->bytesize == 0){
+  if(bytesize == 0){
     logEvent("Error", "Cannot write 0 bytes to file");
     return 0; 
   }
-  
-  bytesToWrite = dataContainer->bytesize; 
-  
+    
   if( fileModeWritable(private->mode) != 1 ){
     logEvent("Error", "File mode isn't writable (or it's NULL)"); 
     return 0; 
@@ -200,20 +197,20 @@ static uint32_t dfWrite(diskFileObject *this, dataContainerObject *dataContainer
   }
   
   //TODO check that readOffset is divisible by sysconf(_SC_PAGE_SIZE) (currently hard coded as sanity check in controller) (this will be irrelevant if we support arbitrary page sizes)
-  mappedMemory = mmap(NULL, bytesToWrite, PROT_WRITE, MAP_SHARED, fid , writeOffset);
+  mappedMemory = mmap(NULL, bytesize, PROT_WRITE, MAP_SHARED, fid , writeOffset);
   if( mappedMemory == MAP_FAILED){
     logEvent("Error", "Failed to memory map file to write to");
     return 0;
   }
   
-  memcpy(mappedMemory, dataContainer->data, bytesToWrite); 
+  memcpy(mappedMemory, dataBuffer, bytesize); 
   
-  if( munmap(mappedMemory, bytesToWrite) ){
+  if( munmap(mappedMemory, bytesize) ){
     logEvent("Error", "Failed to unmap file memory");
     return 0;
   }
   
-  return bytesToWrite;
+  return bytesize;
 }
 
 

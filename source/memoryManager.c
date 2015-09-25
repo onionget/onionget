@@ -5,7 +5,7 @@
 #include "memoryManager.h"
 #include "macros.h"
 
-static int memoryClear(volatile unsigned char *memoryPointerV, size_t bytesize);
+
 
 /*
  * secureAllocate returns NULL on error, otherwise returns a pointer to the allocated memory buffer, which is bytesize bytes and initialized to NULL. 
@@ -37,7 +37,7 @@ void *secureAllocate(size_t bytesize)
  * implemented because the memset solution in MEM03-C causes compiler warnings, this should do the same thing without
  * compiler warning 
  */
-static int memoryClear(void *memoryPointerV, size_t bytesize)
+int memoryClear(void *memoryPointerV, size_t bytesize)
 {
   volatile unsigned char *memoryPointer = NULL;
   

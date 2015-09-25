@@ -11,14 +11,12 @@
 #include <stdint.h>
 
 
-
 //
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
 //
 
 #include "router.h"
-#include "dataContainer.h"
 #include "memoryManager.h"
 #include "ogEnums.h"
 
@@ -28,9 +26,9 @@ typedef struct routerPrivate{
   int            socket; 
 }routerPrivate;
 
-
+receive(routerObject *this, void *receiveBuffer, uint32_t payloadBytesize)
 //public methods
-static dataContainerObject  *receive            ( routerObject *this            , uint32_t payloadBytesize                                                     );
+static int                  receive             ( routerObject *this            , void *receiveBuffer        , uint32_t payloadBytesize                        );
 static int                  transmit            ( routerObject *this            , void *payload              , uint32_t payloadBytesize                        );
 static int                  socks5Connect       ( routerObject *this            , char *destAddress          , uint8_t destAddressBytesize , uint16_t destPort );
 static int                  transmitBytesize    ( routerObject *this            , uint32_t bytesize                                                            );
@@ -40,6 +38,7 @@ static int                  setSocket           ( routerObject *this            
 static int                  destroyRouter       ( routerObject **thisPointer                                                                                   );
 static int                  ipv4Listen          ( routerObject *this            , char *ipv4Address          , int port                                        );
 static int                  getConnection       ( routerObject *this                                                                                           );
+static int                  reinitialize        ( routerObject *this                                                                                           ); 
 
 //private methods
 static int socksResponseValidate          ( routerObject  *this                                                                                                  );
@@ -80,6 +79,7 @@ routerObject *newRouter(void)
   privateThis->publicRouter.getConnection         = &getConnection;
   privateThis->publicRouter.setSocket             = &setSocket; 
   privateThis->publicRouter.destroyRouter         = &destroyRouter;
+  pritvateThis->publicRouter.reinitialize         = &reinitialize; 
   
   
   //initialize private properties
@@ -93,6 +93,28 @@ routerObject *newRouter(void)
 
 /********** PUBLIC METHODS ****************/
 
+
+/*
+ * reinitialize closes the current socket and resets the router to a new state
+ */
+static int reinitialize(routerObject *this)
+{
+  routerPrivate *private = (routerPrivate *)this;
+  
+  if(this == NULL){
+    logEvent("Error", "Something was NULL that shouldn't have been");
+    return 0;
+  }
+  
+  if(private->socket != -1 && close(private->socket) != 0){
+    logEvent("Error", "Failed to close socket, router reinitialization failed\n");
+    return 0;
+  }
+  
+  private->socket = -1; 
+  
+  return 1;   
+}
 
 
 /*
@@ -122,60 +144,48 @@ static int destroyRouter(routerObject **thisPointer)
 
 
 /*
- * recieve returns NULL on error, and a datacontainer containing payloadBytesize of incoming traffic on the socket on success
+ * recieve returns 0 on error, 1 on success
  */
-static dataContainerObject *receive(routerObject *this, uint32_t payloadBytesize)
+static int receive(routerObject *this, void *receiveBuffer, uint32_t payloadBytesize)
 {
   routerPrivate         *private         = NULL;
-  dataContainerObject   *receivedMessage = NULL;
   size_t                bytesReceived    = 0;
   size_t                recvReturn       = 0;
-  
   
   private = (routerPrivate *)this; 
   
   //basic sanity checks
   if(private == NULL || this == NULL){ //this is never NULL if private is but keeping it like it is for now for readability
     logEvent("Error", "Something was NULL that shouldn't have been");
-    return NULL; 
+    return 0; 
   }
   
   if(private->socket == -1){
     logEvent("Error", "This router hasn't a valid socket associated with it");
-    return NULL; 
-  }
-  
-  //allocate the dataContainer object for the incoming message
-  receivedMessage = newDataContainer(payloadBytesize);
-  if(receivedMessage == NULL){
-    logEvent("Error", "Failed to allocate data container for received messager");
-    return NULL;
+    return 0; 
   }
     
   for(bytesReceived = 0, recvReturn = 0; bytesReceived != payloadBytesize; bytesReceived += recvReturn){
-    recvReturn = recv(private->socket, &(receivedMessage->data[bytesReceived]), payloadBytesize - bytesReceived, 0);     
+    recvReturn = recv(private->socket, &receiveBuffer[bytesReceived], payloadBytesize - bytesReceived, 0);     
     if(recvReturn == -1 || recvReturn == 0){ 
-      secureFree(&receivedMessage->data, payloadBytesize);
-      secureFree(receivedMessage, sizeof(*receivedMessage)); 
       logEvent("Error", "Failed to receive bytes");
-      return NULL; 
+      return 0; 
     }     
   }
     
-  return receivedMessage;
+  return 1;
 }
 
 /*
  * getIncomingBytesize receives an incoming uint32_t that encodes the number of subsequent incoming bytes. 
  * NOTE: That this function assumes the interlocutor sends a uint32_t encoding the number of subsequent incoming bytes.
  * 
- * returns 0 on error, note that 0 is also an invalid bytesize for the client to send (TODO: maybe set errno or something) 
+ * returns 0 on error, note that 0 is also an invalid bytesize for the client to send (TODO: better error checking coming soon) 
  */
 static uint32_t getIncomingBytesize(routerObject *this)
 {
-  uint32_t            incomingBytesize           = 0;
-  dataContainerObject *incomingBytesizeContainer = NULL; 
-  
+  uint32_t incomingBytesize = 0;
+
   //basic sanity check
   if(this == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
@@ -183,20 +193,11 @@ static uint32_t getIncomingBytesize(routerObject *this)
   }
   
   //receive the number of incoming bytes, which is encoded as a uint32_t
-  incomingBytesizeContainer = this->receive(this, sizeof(uint32_t));
-  if(incomingBytesizeContainer == NULL){
-    logEvent("Error", "Failed to get incoming bytesize");
-    return 0;  
-  }
-  
-  //properly encode the number of incoming bytes
-  incomingBytesize = *((uint32_t*)incomingBytesizeContainer->data);
-  
-  //destroy the dataContainer holding the traffic we just received from the network
-  if( !incomingBytesizeContainer->destroyDataContainer(&incomingBytesizeContainer) ){
-    logEvent("Error", "Failed to destroy data container");
+  if( !this->receive(this, &incomingBytesize, sizeof(uint32_t)) ){
+    logEvent("Error", "Failed to receive incoming bytesize");
     return 0; 
   }
+
   
   //return the host encoded incoming bytesize 
   return ntohl(incomingBytesize);
@@ -521,42 +522,43 @@ static int setSocketRecvTimeout(routerObject *this, int timeoutSecs, int timeout
  */
 static int initializeSocks5Protocol(routerObject *this)
 { 
-  dataContainerObject *proxyResponse;
+  char proxyResponse[2]; 
   
   if(this == NULL){
-    logEvent("Error", "Something was NULL that shouldn't have been");
+    memoryClear(proxyResponse, 2);
+    logEvent("Error", "Something was NULL that shouldn't have been"); //error handling that doesn't suck ass to come soon TODO
     return 0;
   }
     
   // | VER | NMETHODS | METHODS |
   //socks version 5, one method, no authentication
   if( !this->transmit(this, "\005\001\000", 3) ){
+    memoryClear(proxyResponse, 2);
     logEvent("Error", "Socks connection failed to transmit bytes to socks server");
     return 0;
   }
   
   // | VER | METHOD |
-  proxyResponse = this->receive(this, 2);
-  if(proxyResponse == NULL){
-    logEvent("Error", "Socks connection failed to receive response from socks server");
-    return 0;
+  if( !this->receive(this, &proxyResponse, 2) ){
+    memoryClear(proxyResponse, 2);
+    logEvent("Error", "Failed to get response from proxy");
+    return 0; 
   }
-    
-  if(proxyResponse->data[0] != 5){
+
+  
+  if(proxyResponse[0] != 5){
+    memoryClear(proxyResponse, 2);
     logEvent("Error", "Proxy doesn't think it is socks 5");
     return 0; 
   }
   
-  if(proxyResponse->data[1] != 0){
+  if(proxyResponse[1] != 0){
+    memoryClear(proxyResponse, 2);
     logEvent("Error", "Proxy expects authentication");
     return 0; 
   }
   
-  if( !proxyResponse->destroyDataContainer(&proxyResponse) ){
-    logEvent("Error" "Failed to destroy data container");
-    return 0;
-  }
-  
+  memoryClear(proxyResponse, 2);
   return 1; 
 }
 
@@ -567,20 +569,7 @@ static int initializeSocks5Protocol(routerObject *this)
  * returns 0 on error (or failure), 1 on success. 
  * NOTE: desAddress should be a URL (I don't think this currently supports IP addresses, but TODO I should look into this) 
  */
-static int sendSocks5ConnectRequest(routerObject *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort)
-{
-  int                 requestBytesize;
-  dataContainerObject *socksRequest;
-  
-  if(this == NULL || destAddress == NULL){
-    logEvent("Error", "Something was NULL that shouldn't have been");
-    return 0; 
-  }
-  
-  //format the destination port in network order
-  destPort = htons(destPort);
-  
-  
+
  /* CLIENT REQUEST FORMAT
   * 
   * note destAddress is prepended with one octet specifying its bytesize
@@ -591,35 +580,52 @@ static int sendSocks5ConnectRequest(routerObject *this, char *destAddress, uint8
   * | 1  |  1  | X'00' |  1   | Variable |    2     |
   * +----+-----+-------+------+----------+----------+
   *
-  */
-  requestBytesize = 1 + 1 + 1 + 1 + destAddressBytesize + 1 + 2;
+  */ //TODO wipe stack when done look at memory manager to make sure can do this
+static int sendSocks5ConnectRequest(routerObject *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort)
+{
+  int fixedSocksBytes        = 1 + 1 + 1 + 1 + 1 + 2;
+  int maxDestAddressBytesize = 100; 
+ 
+  char socksRequest[fixedSocksBytes + maxDestAddressBytesize];
   
-
-  socksRequest = newDataContainer(requestBytesize);
-  if(socksRequest == NULL){
-    logEvent("Error", "Failed to create data container for socks request");
-    return 0;
+  int requestBytesize = fixedSocksBytes + destAddressBytesize; //TODO look into cast differences, make sure it is legit
+  
+  if(requestBytesize > fixedSocksBytes + maxDestAddressBytesize){
+    logEvent("Error", "Dest address bytesize must be 100 or less");
+    memoryClear(socksRequest, fixedSocksBytes + maxDestAddressBytesize);
+    return 0; 
   }
+  
+  if(this == NULL || destAddress == NULL){
+    logEvent("Error", "Something was NULL that shouldn't have been");
+    memoryClear(socksRequest, fixedSocksBytes + maxDestAddressBytesize);
+    return 0; 
+  }
+  
+  //format the destination port in network order
+  destPort = htons(destPort);
+  
     
   //first four bytes: socks version 5, command is connect, rsv is null, identifier is domain name 
-  memcpy(socksRequest->data, "\005\001\000\003", 4);
+  memcpy(&socksRequest[0], "\005\001\000\003", 4);
+  
   //fifth byte: prepend identifier with its bytesize 
-  memcpy(&socksRequest->data[4], &destAddressBytesize, 1);
+  memcpy(&socksRequest[4], &destAddressBytesize, 1);
+  
   //variable bytes: the destination identifier
-  memcpy(&socksRequest->data[5], destAddress, destAddressBytesize);
+  memcpy(&socksRequest[5], destAddress, destAddressBytesize);
+  
   //final two bytes: the destination port in network octet order
-  memcpy(&socksRequest->data[5 + destAddressBytesize], &destPort, 2);
+  memcpy(&socksRequest[5 + destAddressBytesize], &destPort, 2);
   
   
-  if( !this->transmit(this, socksRequest->data, requestBytesize) ){
+  if( !this->transmit(this, socksRequest, requestBytesize) ){
+    memoryClear(socksRequest, fixedSocksBytes + maxDestAddressBytesize); //TODO error checking that doesn't suck ass soon
     logEvent("Error", "Failed to transmit message to socks server");
     return 0;
   }
   
-  if( !socksRequest->destroyDataContainer(&socksRequest) ){
-    logEvent("Error", "Failed to destroy data container");
-    return 0; 
-  }
+  memoryClear(socksRequest, fixedSocksBytes + maxDestAddressBytesize);
   
   return 1; 
 }
@@ -634,7 +640,7 @@ static int sendSocks5ConnectRequest(routerObject *this, char *destAddress, uint8
  */
 static int socksResponseValidate(routerObject *this)
 {
-  dataContainerObject *proxyResponse;
+  char proxyResponse[10];
   
   if(this == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
@@ -649,26 +655,24 @@ static int socksResponseValidate(routerObject *this)
   * | 1  |  1  | X'00' |  1   | Variable |    2     |
   * +----+-----+-------+------+----------+----------+
   */
-  proxyResponse = this->receive(this, 10);
-  if(proxyResponse == NULL){
-    logEvent("Error", "Failed to establish Socks connection");
+  if( !this->receive(this, &proxyResponse, 10) ){
+    memoryClear(proxyResponse, 10);
+    logEvent("Error", "Failed to receive proxy response");
     return 0; 
   }
-    
-  if(proxyResponse->data[0] != 5){
-    logEvent("Error", "Socks server doesn't think it is version 5");
+
+  if(proxyResponse[0] != 5){
+    memoryClear(proxyResponse, 10);
+    logEvent("Error", "Socks server doesn't think it is version 5"); //todo better error checking soon
     return 0; 
   }
   
-  if(proxyResponse->data[1] != 0){
+  if(proxyResponse[1] != 0){
+    memoryClear(proxyResponse, 10);
     logEvent("Error", "Connection failed");
     return 0; 
   }
-  
-  if( !proxyResponse->destroyDataContainer(&proxyResponse) ){
-    logEvent("Error", "Failed to destroy datacontainer");
-    return 0;
-  }
-  
+   
+  memoryClear(proxyResponse, 10);
   return 1; 
 }

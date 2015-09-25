@@ -211,10 +211,11 @@ static int getFiles(clientObject *this, char *dirPath, char **fileNames, uint32_
  * getIncomingFile returns 0 on error and 1 on success TODO check int types
  */ 
 static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
-{
-  dataContainerObject *incomingFileChunk   = NULL;
+{  
+  char                incomingFileChunk[FILE_CHUNK_BYTESIZE]; 
+  
   uint32_t            incomingFileBytesize = 0; 
-  uint64_t            bytesToGet           = 0; 
+  size_t              bytesToGet           = 0; 
   uint32_t            bytesWritten         = 0; 
   uint32_t            writeOffset          = FILE_START; 
   
@@ -222,6 +223,7 @@ static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
   private = (clientPrivate *)this; 
   
   if(private == NULL || private->router == NULL || this == NULL || diskFile == NULL){
+    memoryClear(incomingFileChunk, FILE_CHUNK_BYTESIZE);
     logEvent("Error", "Something was NULL that shouldn't have been");
     return 0; 
   }
@@ -229,6 +231,7 @@ static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
   //the server sends us the incoming file's bytesize
   incomingFileBytesize = private->router->getIncomingBytesize(private->router); 
   if(!incomingFileBytesize){
+    memoryClear(incomingFileChunk, FILE_CHUNK_BYTESIZE);
     logEvent("Error", "Failed to get incoming file bytesize, aborting");
     return 0;
   }
@@ -241,15 +244,16 @@ static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
     bytesToGet = (incomingFileBytesize <= FILE_CHUNK_BYTESIZE) ? incomingFileBytesize : FILE_CHUNK_BYTESIZE; 
         
     //get up to FILE_CHUNK_BYTESIZE bytes of the file
-    incomingFileChunk = private->router->receive(private->router, bytesToGet);
-    if(incomingFileChunk == NULL){
-      logEvent("Error", "Failed to receive data, aborting");
-      return 0; 
+    if( !private->router->receive(private->router, incomingFileChunk, bytesToGet){
+      memoryClear(incomingFileChunk, FILE_CHUNK_BYTESIZE);
+      logEvent("Error", "Failed to receive data chunk");
+      return 0; // TODO good error checking soon (plus wipe)
     }
-    
+           
     //then write it to disk
-    bytesWritten = diskFile->dfWrite(diskFile, incomingFileChunk, writeOffset);
+    bytesWritten = diskFile->dfWrite(diskFile, incomingFileChunk, bytesToGet, writeOffset);
     if(bytesWritten == 0){
+      memoryClear(incomingFileChunk, FILE_CHUNK_BYTESIZE);
       logEvent("Error", "Failed to write file to disk, aborting");
       return 0;
     }
@@ -258,11 +262,13 @@ static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
     
     //then destroy the data container that holds the current file chunk in RAM
     if( !incomingFileChunk->destroyDataContainer(&incomingFileChunk) ){
+      memoryClear(incomingFileChunk, FILE_CHUNK_BYTESIZE); //TODO ERROR CHECKING THAT DOESN'T SUCK SOON
       logEvent("Error", "Failed to destroy data container");
       return 0; 
     }
-    
   }
+  
+  memoryClear(incomingFileChunk, FILE_CHUNK_BYTESIZE);
   
   return 1; 
 }

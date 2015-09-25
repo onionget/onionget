@@ -5,7 +5,7 @@
 
 typedef struct routerObject{
   int (*socks5Connect)(struct routerObject *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort);
-  dataContainerObject *(*receive)(struct routerObject *this, uint32_t payloadBytesize);
+  dataContainerObject *(*receive)(struct routerObject *this, void *receiveBuffer, uint32_t payloadBytesize);
   int (*transmit)(struct routerObject *this, void *payload, uint32_t payloadBytesize);
   int (*transmitBytesize)(struct routerObject *this, uint32_t bytesize);
   uint32_t (*getIncomingBytesize)(struct routerObject *this);
@@ -14,6 +14,7 @@ typedef struct routerObject{
   int  (*getConnection)(struct routerObject *this);
   int  (*setSocket)(struct routerObject *this, int socket);
   int (*destroyRouter)(struct routerObject **thisPointer); 
+  int (*reinitialize)(struct routerObject *this); 
 }routerObject;
 
 
