@@ -9,6 +9,7 @@
 #include "diskFile.h"
 #include "memoryManager.h"
 #include "ogEnums.h"
+#include "macros.h"
 
 
 //private internal values 

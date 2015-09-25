@@ -52,17 +52,14 @@ int main(int argc, char *argv[])
 
 /*
 //NOTE: Because we mmap files for reading and writing, and need to use offsets, and mmap offsets need to be multiples of
-//the system page size, currently only supporting standard page sizes (all popular architectures normal page sizes supported
-//and several possible huge page sizes supported as well), TODO add support for arbitrary page sizes, relevant files are 
-//ogEnums (FILE_CHUNK_BYTESIZE = 2097152), and the files that use this (client, for determining how much incoming file data to write to
-//the drive at a time, and {file cache related files} for determining how much file data to read in at a time. 
+//the system page size, currently only supporting standard page sizes 
 static int systemSanityCheck()
 {
   long pageBytesize;  
   pageBytesize = sysconf(_SC_PAGE_SIZE);
   
-  if( pageBytesize != 4096 && pageBytesize != 8192 && pageBytesize != 65536 && pageBytesize != 262144 && pageBytesize != 1048576 && pageBytesize != 2097152){
-    logEvent("Error", "Currently only systems using 4096, 8129, 65536, 262144, 1048576, and 2097125 byte page sizes are currently supported");
+  if( pageBytesize != 4096 && pageBytesize != 8192){
+    logEvent("Error", "Currently only systems using 4096 or 8129 byte page sizes are supported");
     return 0;
   }
   
