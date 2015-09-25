@@ -258,14 +258,7 @@ static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
       return 0;
     }
     writeOffset += bytesWritten; 
-    
-    
-    //then destroy the data container that holds the current file chunk in RAM
-    if( !incomingFileChunk->destroyDataContainer(&incomingFileChunk) ){
-      memoryClear(incomingFileChunk, FILE_CHUNK_BYTESIZE); //TODO ERROR CHECKING THAT DOESN'T SUCK SOON
-      logEvent("Error", "Failed to destroy data container");
-      return 0; 
-    }
+
   }
   
   memoryClear(incomingFileChunk, FILE_CHUNK_BYTESIZE);

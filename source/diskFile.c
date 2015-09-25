@@ -18,6 +18,7 @@ typedef struct diskFilePrivate{
   char           *mode;
   char           *fullPath;
   uint32_t       fullPathBytesize; 
+  uint32_t       bytesize; 
   FILE           *descriptor; 
 }diskFilePrivate;
 
@@ -26,7 +27,7 @@ typedef struct diskFilePrivate{
 static uint32_t              dfWrite(diskFileObject *this, void *dataBuffer, size_t bytesize, uint32_t writeOffset); 
 static dataContainerObject   *dfRead(diskFileObject *this, uint32_t bytesToRead, uint32_t readOffset);
 static int                   closeTearDown(diskFileObject **thisPointer);
-static long                  dfBytesize(diskFileObject *this);
+static uint32_t              dfBytesize(diskFileObject *this);
 static int                   dfOpen(diskFileObject *this, char *path, char *name, char *mode);
 
 //PRIVATE METHODS
@@ -65,7 +66,7 @@ diskFileObject *newDiskFile(void)
   privateThis->publicDiskFile.dfWrite         = &dfWrite;
   privateThis->publicDiskFile.dfRead          = &dfRead; 
   privateThis->publicDiskFile.closeTearDown   = &closeTearDown;
-  privateThis->publicDiskFile.dfBytesize      = &dfBytesize; 
+  privateThis->publicDiskFile.getBytesize     = &getBytesize;
   
 
   //initialize private properties 
@@ -73,6 +74,7 @@ diskFileObject *newDiskFile(void)
   privateThis->fullPath         = NULL;
   privateThis->fullPathBytesize = 0;
   privateThis->descriptor       = NULL;
+  privateThis->bytesize         = -1; 
   
 
   return (diskFileObject *) privateThis; 
@@ -82,43 +84,7 @@ diskFileObject *newDiskFile(void)
 
 /******** PUBLIC METHODS *********/
 
-/*
- * dfBytesize returns -1 on error, and the bytesize of the initialized diskFile on success
- */
-static long dfBytesize(diskFileObject *this)
-{
-  long            fileBytesize = 0;
-  diskFilePrivate *private     = NULL;
-  
-  private = (diskFilePrivate *) this; 
-  
-  if( private == NULL || this == NULL || private->descriptor == NULL ){ //this is always NULL if private it, but for readability
-    logEvent("Error", "Something was NULL that shouldn't have been");
-    return -1; 
-  }
-  
-  if( fileModeSeekable(private->mode) != 1 ){
-    logEvent("Error", "File mode is not seekable (or it's NULL)");
-    return -1; 
-  }
-    
-  if( fseek(private->descriptor, 0, SEEK_END) == -1 ){
-    logEvent("Error", "Failed to seek to end of file");
-    return -1; 
-  }
-  
-  if( (fileBytesize = ftell(private->descriptor)) == -1 ){
-    logEvent("Error", "Failed to get file bytesize");
-    return -1; 
-  }
-  
-  if( fseek(private->descriptor, 0, SEEK_SET) == -1 ){
-    logEvent("Error", "Failed to seek to start of file");
-    return -1; 
-  }
-  
-  return fileBytesize; 
-}
+
 
 
 
@@ -216,62 +182,52 @@ static uint32_t dfWrite(diskFileObject *this, void *dataBuffer, size_t bytesize,
 
 
 /*
- * dfRead returns NULL on error and a pointer to a dataContainer holding the data from the file associated with the diskFile object on success.
+ * dfRead returns 0 on error and 1 on success WARNING make sure that mmap with bytesToRead larger than file bytes that exist is secure, or that it will never happening TODO
  */
-static dataContainerObject *dfRead(diskFileObject *this, uint32_t bytesToRead, uint32_t readOffset)
+static int *dfRead(diskFileObject *this, void** outBuffer, uint32_t bytesToRead, uint32_t readOffset)
 {
-  dataContainerObject *dataContainer = NULL; 
-  void                *mappedMemory  = NULL;
   int                 fid            = 0;
   diskFilePrivate     *private       = NULL;
+  void                *mmapAddr      = NULL; 
   
   private = (diskFilePrivate *)this; 
   
   if( private == NULL || this == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
-    return NULL; 
+    return 0; 
   }
   
   if( fileModeReadable(private->mode) != 1 ){
     logEvent("Error", "File mode is not readable (or it's NULL)");
-    return NULL; 
+    return 0; 
   }
     
   if(private->descriptor == NULL){
     logEvent("Error", "File is not open");
-    return NULL;
+    return 0;
   }
     
-  dataContainer = newDataContainer(bytesToRead);
-  if(dataContainer == NULL){
-    logEvent("Error", "Failed to create data container to read file into");
-    return NULL; 
-  }
 
   fid = fileno(private->descriptor);
   if(fid == -1){
     logEvent("Error", "Failed to get integer file descriptor");
-    dataContainer->destroyDataContainer(&dataContainer); 
     return 0; 
   }
 
   //TODO check that readOffset is divisible by sysconf(_SC_PAGE_SIZE) (currently hard coded as sanity check in controller) (this will be irrelevant if we support arbitrary page sizes)
-  mappedMemory = mmap(NULL, bytesToRead, PROT_READ, MAP_PRIVATE, fid , readOffset);
+  mmapAddr = mmap(*outBuffer, bytesToRead, PROT_READ, MAP_PRIVATE | MAP_LOCKED, fid , readOffset); //NOTE need to mlock stillread mmap man pages
   if( mappedMemory == MAP_FAILED){
     logEvent("Error", "Failed to memory map file to write to");
-    dataContainer->destroyDataContainer(&dataContainer); 
     return 0;
   }
   
-  memcpy(dataContainer->data, mappedMemory, bytesToRead);
+  *outBuffer = mmapAddr; 
   
-  if( munmap(mappedMemory, bytesToRead) ){
-    logEvent("Error", "Failed to unmap memory read");
-    dataContainer->destroyDataContainer(&dataContainer); 
-    return 0; 
-  }
 
-  return dataContainer; 
+  
+
+
+  return 1; 
 }
 
 
@@ -299,13 +255,74 @@ static int dfOpen(diskFileObject *this, char *path, char *name, char *mode)
     logEvent("Error", "Failed to open file"); //TODO reset object state? 
     return 0; 
   }
+  
+  if( fileModeSeekable(private->mode) == 1 ){ 
+    private->bytesize = this->dfBytesize(this); 
+    if(private->bytesize == -1){
+      logEvent("Error", "Failed to determine file bytesize");
+      return 0; 
+    }
+  }
  
   return 1;
 }
 
 
+static uint32_t getBytesize(diskFile *this)
+{
+  diskFileprivate *private = (diskFilePrivate *)this;
+  
+  if(private == NULL){
+    logEvent("Error", "Something was NULL that shouldn't have been");
+    return -1;
+  }
+  
+  return private->bytesize; 
+}
+
 
 /******** PRIVATE METHODS *********/
+
+
+/*
+ * dfBytesize returns -1 on error, and the bytesize of the initialized diskFile on success
+ */
+static uint32_t dfBytesize(diskFileObject *this)
+{
+  long            fileBytesize = 0;
+  diskFilePrivate *private     = NULL;
+  
+  private = (diskFilePrivate *) this; 
+  
+  if( private == NULL || this == NULL || private->descriptor == NULL ){ //this is always NULL if private it, but for readability
+    logEvent("Error", "Something was NULL that shouldn't have been");
+    return -1; 
+  }
+  
+  if( fileModeSeekable(private->mode) != 1 ){
+    logEvent("Error", "File mode is not seekable (or it's NULL)");
+    return -1; 
+  }
+    
+  if( fseek(private->descriptor, 0, SEEK_END) == -1 ){
+    logEvent("Error", "Failed to seek to end of file");
+    return -1; 
+  }
+  
+  if( (fileBytesize = ftell(private->descriptor)) == -1 ){
+    logEvent("Error", "Failed to get file bytesize");
+    return -1; 
+  }
+  
+  if( fseek(private->descriptor, 0, SEEK_SET) == -1 ){
+    logEvent("Error", "Failed to seek to start of file");
+    return -1; 
+  }
+  
+  return (uint32_t)fileBytesize; //TODO need to go over all interger usage and make sure it is not screwing up anywhere, for now just hoping this is working correctly WARNING (WARNING long is more bytes than uint32_t so truncation is certain for large values this is a security problem but leaving for now) TODO TODO TODO
+}
+
+
 
 /*
  * initializeFileProperties returns 0 on error and 1 on success.  

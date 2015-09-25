@@ -2,10 +2,11 @@
 #include <stdint.h>
 #include "dataContainer.h"
 
+//note want to support uint64_t file transfers so need to implement htonll TODO
 
 typedef struct routerObject{
   int (*socks5Connect)(struct routerObject *this, char *destAddress, uint8_t destAddressBytesize, uint16_t destPort);
-  dataContainerObject *(*receive)(struct routerObject *this, void *receiveBuffer, uint32_t payloadBytesize);
+  int (*receive)(struct routerObject *this, void *receiveBuffer, uint32_t payloadBytesize);
   int (*transmit)(struct routerObject *this, void *payload, uint32_t payloadBytesize);
   int (*transmitBytesize)(struct routerObject *this, uint32_t bytesize);
   uint32_t (*getIncomingBytesize)(struct routerObject *this);

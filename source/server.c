@@ -22,9 +22,10 @@
  */
 
 
-static FileBankObject     *globalFileBank        = NULL;
-static routerBankObject   *globalConnectionBank  = NULL;
-static routerObject       *globalServerRouter    = NULL;
+static   fileBankObject     *globalFileBank         = NULL;
+static   connectionObject   **globalConnectionBank  = NULL;
+uint32_t maxConnections                             = 0; 
+static   routerObject       *globalServerRouter     = NULL;
 
 
 
@@ -210,8 +211,9 @@ static void *processConnection(void *connectionV)
 //returns bytesize of sent filename (or -1 on error); 
 static uint32_t sendNextRequestedFile(connectionObject *connection)
 {
-  dataContainerObject *outgoingFile    = NULL; 
-  uint32_t            filenameBytesize = 0;
+  uint32_t filenameBytesize = 0;
+  diskFile *outgoingFile    = NULL; 
+  uint32_t  fileBytesize     = 0; //TODO eventually make uint64_t + support this in networking + client + server +disklfile etc, switch to 64 bit eventually (used many spots make sure to change all when I do it)...
   
   if(connection == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
@@ -233,8 +235,7 @@ static uint32_t sendNextRequestedFile(connectionObject *connection)
   }
      
   /*
-  //NOTE that we don't want to destroy this because it is a pointer to the file on the cache linked list (or NULL if it isn't on it) (TODO think about this, depends on implementation) 
-  TODO TODO TODO 
+  // TODO TODO TODO 
   */
   outgoingFile = globalFileBank->withdrawById(connection->requestedFilename, filenameBytesize); //TODO this needs to be implemented NOTE that we must never rely on strlen for anything always know sizes refactor out all strlens
   
@@ -244,10 +245,23 @@ static uint32_t sendNextRequestedFile(connectionObject *connection)
     goto error; 
   }
   
-  if( !connection->router->transmitBytesize(connection->router, outgoingFile->bytesize) ){
+  fileBytesize = outgoingFile->getBytesize(outgoingFile);
+  if(fileBytesize == -1){
+    logEvent("Error", "Failed to get file bytesize");
+    goto error; 
+  }
+  
+  if( !connection->router->transmitBytesize(connection->router, fileBytesize) ){ 
     logEvent("Error", "Failed to transmit file bytesize to client");
     goto error;
   }
+  
+  //TODO do a read and send loop here like client does receive and write loop TODO TODO TODO
+  //have diskFile have cache of itself in RAM starting from byte 0 to byte X, and dfRead can check if the offset is cached or if it needs to get it from RAM 
+  
+  //static int *dfRead(diskFileObject *this, uint32_t bytesToRead, uint32_t readOffset)
+  
+  outgoingFile->dfRead(outgoingFile, ); //TODO finish this
   
   if( !connection->router->transmit(connection->router, outgoingFile->data, outgoingFile->bytesize) ){
     logEvent("Error", "Failed to transmit file to client");

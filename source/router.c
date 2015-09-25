@@ -526,7 +526,7 @@ static int initializeSocks5Protocol(routerObject *this)
   
   if(this == NULL){
     memoryClear(proxyResponse, 2);
-    logEvent("Error", "Something was NULL that shouldn't have been"); //error handling that doesn't suck ass to come soon TODO
+    logEvent("Error", "Something was NULL that shouldn't have been"); 
     return 0;
   }
     
