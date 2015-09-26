@@ -3,7 +3,6 @@
 #include <string.h>
 #include <stdint.h>
 
-#include "dataContainer.h"
 #include "bank.h"
 #include "memoryManager.h"
 #include "ogEnums.h"
@@ -17,7 +16,9 @@ typedef struct bankSlot
 {
   struct bankSlot   *previous;
   struct bankSlot   *next;
-  void              *pointer; 
+  void              *pointer;
+  char              *id;
+  uint32_t          idBytesize; 
 }bankSlot;
 
 
@@ -30,8 +31,9 @@ typedef struct bankPrivate{
 
 
 //public methods
-static void       *withdraw(bankObject *this);
-static int        deposit(bankObject *this, void *pointer);
+static void *withdraw(bankObject *this);
+static int  deposit(bankObject *this, void *pointer, char *id, uint32_t idBytesize);
+static void *getPointerById(bankObject *this, char *id, uint32_t idBytesize);
 
 //private methods 
 static int        spawnSlot(bankObject *this);
@@ -61,13 +63,15 @@ bankObject* newBank(uint32_t slots)
   }
   
   //initialize public methods
-  privateThis->publicBank.withdraw  = &withdraw;
-  privateThis->publicBank.deposit   = &deposit; 
+  privateThis->publicBank.withdraw       = &withdraw;
+  privateThis->publicBank.deposit        = &deposit; 
+  privateThis->publicBank.getPointerById = &getPointerById;
+  
   
   //initialize private properties 
   privateThis->head   = NULL; 
   privateThis->tail   = NULL;
-  privateThis->count  = 0; 
+  privateThis->count  = 0;  //TODO not sure if I ever use this maybe remove it
   
   this->count = slots; 
   
@@ -87,7 +91,7 @@ bankObject* newBank(uint32_t slots)
 
 /* 
  * Checks slots from head and returns the pointer held by the first slot that holds a pointer to something besides NULL, or a NULL pointer on error or all slots empty 
- * NOTE: for thread safety access to this must be blocked with a mutex (do so at a higher level of abstraction) 
+ * NOTE: for thread safety access to this must be blocked with a mutex (do so at a higher level of abstraction). Withdraw removes from this list.  
  */
 static void *withdraw(bankObject *this)
 {
@@ -108,7 +112,7 @@ static void *withdraw(bankObject *this)
       slot->pointer   = NULL;
       
       if( !moveToTail(slot) ){
-	logEvent("Error", "Failed to move slot to tail of list");
+	logEvent("Error", "Failed to move slot to tail of list"); //TODO we only want to do this with connection objects, let's rethink if both should use the same back end
 	return NULL; 
       }
       
@@ -120,16 +124,35 @@ static void *withdraw(bankObject *this)
 }
 
 
-
-
-//checks slots from head and adds item to first open slot available, returns -1 on error, 1 on success, and 0 if no open slots
-//NOTE: for thread safety access to this must be blocked with a mutex (do so at a higher level of abstraction) 
-static int deposit(bankObject *this, void *pointer)
+static void *getPointerById(bankObject *this, char *id, uint32_t idBytesize)
 {
   bankPrivate *private = NULL;
   bankSlot    *slot    = NULL;
   
-  if(this == NULL || pointer == NULL){
+  if(this == NULL || id == NULL || idBytesize == 0){
+    logEvent("Error", "Something was NULL that shouldn't have been");
+    return NULL;
+  }
+  
+  private = (bankPrivate *)this;
+  
+  for(slot = private->head ; slot ; slot = slot->next){   
+    if     ( slot->pointer == NULL            ) continue;  
+    else if( !memcmp(slot->id, id, idBytesize)) return slot->pointer;  
+  }
+    
+  return NULL;     
+}
+
+
+//checks slots from head and adds item to first open slot available, returns -1 on error, 1 on success, and 0 if no open slots
+//NOTE: for thread safety access to this must be blocked with a mutex (do so at a higher level of abstraction) 
+static int deposit(bankObject *this, void *pointer, char *id, uint32_t idBytesize)
+{
+  bankPrivate *private = NULL;
+  bankSlot    *slot    = NULL;
+  
+  if(this == NULL || pointer == NULL || id == NULL || idBytesize = 0){
     logEvent("Error", "Something was NULL that shouldn't have been");
     return -1; 
   }
@@ -138,7 +161,9 @@ static int deposit(bankObject *this, void *pointer)
   
   for(slot = private->head ; slot ; slot = slot->next){
     if(slot->pointer == NULL){
-      slot->pointer = pointer;
+      slot->pointer    = pointer;
+      slot->id         = id;
+      slot->idBytesize = idBytesize; 
       return 1; 
     }
   }

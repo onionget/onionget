@@ -22,7 +22,7 @@ connectionObject *newConnection(void)
   
   this->router            = newRouter();
   this->requestedFilename = (char *)secureAllocate(MAX_FILE_ID_BYTESIZE);
-  this->dataCache         = NULL; //mmap
+  this->dataCache         = (char *)secureAllocate(FILE_CHUNK_BYTESIZE); 
   
   this->reinitialize      = &reinitialize; 
  
@@ -47,10 +47,10 @@ static int reinitialize(connectionObject *this)
     return 0; 
   }
   
-  if( munmap(this->dataCache, FILE_CHUNK_BYTESIZE) ){ //TODO think more about this, make sure it can be done, or do this differently, needs more thought into this
-    logEvent("Error", "Failed to unmap memory read");
+  if( !memoryClear(this->dataCache, FILE_CHUNK_BYTESIZE ){
+    logEvent("Error", "Failed to clear client memory cache");
     return 0; 
   }
-  
+    
   return 1; 
 }

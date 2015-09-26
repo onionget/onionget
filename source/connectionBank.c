@@ -42,6 +42,10 @@ connectionBankObject *newConnectionBank(uint32_t slots)
   
   //initialize private properties TODO dependency inject this?
   privateThis->connectionObjects = newBank(slots); 
+  if(privateThis->connectionObjects == NULL){
+    logEvent("Error", "Failed to allocate bank for connections"); //TODO better error checking that cleans up
+    return NULL; 
+  }
   
   
   return (connectionBankObject *)privateThis;
@@ -62,7 +66,7 @@ static int deposit(connectionBankObject *this, connectionObject *connection)
   }
   
   
-  if( !private->connectionObjects->deposit(private->connectionObjects, connection) ){
+  if( !private->connectionObjects->deposit(private->connectionObjects, connection, "N/A", 3) ){
     logEvent("Error", "Failed to deposit a connection object");
     pthread_mutex_unlock(&depositLock); 
     return 0; 

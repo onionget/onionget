@@ -7,7 +7,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "dataContainer.h"
+
 #include "router.h"
 #include "memoryManager.h"
 #include "connectionBank.h"
@@ -18,12 +18,12 @@
 #include "macros.h"
 
 /*
- * Server follows singleton paradigm for now
+ * Server follows singleton pattern for now
  */
 
 
 static   fileBankObject        *globalFileBank         = NULL;
-static   connectionBankObect   *globalConnectionBank  = NULL;
+static   connectionBankObect   *globalConnectionBank   = NULL;
 static   routerObject          *globalServerRouter     = NULL;
 
 
@@ -212,6 +212,8 @@ static uint32_t sendNextRequestedFile(connectionObject *connection)
 {
   uint32_t filenameBytesize = 0;
   diskFile *outgoingFile    = NULL; 
+  uint32_t bytesAlreadyRead       = 0; 
+  uint32_t byteToRead      = 0; 
   uint32_t  fileBytesize     = 0; //TODO eventually make uint64_t + support this in networking + client + server +disklfile etc, switch to 64 bit eventually (used many spots make sure to change all when I do it)...
   
   if(connection == NULL){
@@ -233,12 +235,9 @@ static uint32_t sendNextRequestedFile(connectionObject *connection)
     return 0;
   }
      
-  /*
-  // TODO TODO TODO 
-  */
-  outgoingFile = globalFileBank->withdrawById(connection->requestedFilename, filenameBytesize); //TODO this needs to be implemented NOTE that we must never rely on strlen for anything always know sizes refactor out all strlens
+  //random NOTE (Stop relying on strlen for anything anywhere)
   
-  
+  outgoingFile = globalFileBank->getPointerById(connection->requestedFilename, filenameBytesize); 
   if(!outgoingFile && !sendFileNotFound(connection)){
     logEvent("Error", "Failed to send file not found to client");
     goto error; 
@@ -255,18 +254,22 @@ static uint32_t sendNextRequestedFile(connectionObject *connection)
     goto error;
   }
   
-  //TODO do a read and send loop here like client does receive and write loop TODO TODO TODO
-  //have diskFile have cache of itself in RAM starting from byte 0 to byte X, and dfRead can check if the offset is cached or if it needs to get it from disk 
   
-  //static int *dfRead(diskFileObject *this, void** outBuffer, uint32_t bytesToRead, uint32_t readOffset)
+  for(bytesAlreadyRead = 0, bytesToRead = 0; bytesAlreadyRead < fileBytesize; bytesAlreadyRead += bytesToRead){
+    bytesToRead = ( (fileBytesize - bytesAlreadyRead) < FILE_CHUNK_BYTESIZE ? (fileBytesize - bytesAlreadyRead) : FILE_CHUNK_BYTESIZE; 
   
-  outgoingFile->dfRead(outgoingFile, ); //TODO finish this
+    if( !outgoingFile->dfRead(outgoingFile, connection->dataCache, bytesToRead, bytesAlreadyRead) ){
+      logEvent("Error", "Failed to read file bytes");
+      goto error; 
+    }
   
-  if( !connection->router->transmit(connection->router, outgoingFile->data, outgoingFile->bytesize) ){
-    logEvent("Error", "Failed to transmit file to client");
-    goto error; 
+    if( !connection->router->transmit(connection->router, connection->dataCache, bytesToRead) ){ //TODO should we make a packet format that is padded and fixed size? I think so. 
+      logEvent("Error", "Failed to transmit file to client");
+      goto error; 
+    }
   }
   
+
   return filenameBytesize; 
   
   error:

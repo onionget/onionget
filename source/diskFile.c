@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include <sys/mman.h>
 
-#include "dataContainer.h"
 #include "diskFile.h"
 #include "memoryManager.h"
 #include "ogEnums.h"
@@ -20,12 +19,14 @@ typedef struct diskFilePrivate{
   uint32_t       fullPathBytesize; 
   uint32_t       bytesize; 
   FILE           *descriptor; 
+  void           *cache; 
+  uint32_t       cacheBytesize; 
 }diskFilePrivate;
 
 
 //PUBLIC METHODS
 static uint32_t              dfWrite(diskFileObject *this, void *dataBuffer, size_t bytesize, uint32_t writeOffset); 
-static dataContainerObject   *dfRead(diskFileObject *this, uint32_t bytesToRead, uint32_t readOffset);
+static int                   dfRead(diskFileObject *this, uint32_t bytesToRead, uint32_t readOffset);
 static int                   closeTearDown(diskFileObject **thisPointer);
 static uint32_t              dfBytesize(diskFileObject *this);
 static int                   dfOpen(diskFileObject *this, char *path, char *name, char *mode);
@@ -75,6 +76,8 @@ diskFileObject *newDiskFile(void)
   privateThis->fullPathBytesize = 0;
   privateThis->descriptor       = NULL;
   privateThis->bytesize         = -1; 
+  privateThis->cache            = NULL;
+  privateThis->cacheBytesize    = 0; 
   
 
   return (diskFileObject *) privateThis; 
@@ -183,8 +186,9 @@ static uint32_t dfWrite(diskFileObject *this, void *dataBuffer, size_t bytesize,
 
 /*
  * dfRead returns 0 on error and 1 on success WARNING make sure that mmap with bytesToRead larger than file bytes that exist is secure, or that it will never happening TODO
+ * NOTE: Switch from a byte paradigm to a fileChunkSize Paradigm to make cache smoother, readOffset etc all need to map up for this to work, check cache function for details WARNING
  */
-static int *dfRead(diskFileObject *this, void** outBuffer, uint32_t bytesToRead, uint32_t readOffset)
+static int dfRead(diskFileObject *this, void* outBuffer, uint32_t bytesToRead, uint32_t readOffset)
 {
   int                 fid            = 0;
   diskFilePrivate     *private       = NULL;
@@ -206,8 +210,13 @@ static int *dfRead(diskFileObject *this, void** outBuffer, uint32_t bytesToRead,
     logEvent("Error", "File is not open");
     return 0;
   }
-    
-
+  
+  //if it is cached copy from cache WARNING THIS CODE NEEDS LOOKED AT WARNING WARNING WARNING DRAW IT OUT WARNING
+  if( (readOffset < private->cacheBytesize) && (bytesToRead <= private->cacheBytesize - readOffset) ){
+    memcpy(outBuffer, &(private->cache[readOffset]), bytesToRead); 
+    return 1; 
+  }
+  
   fid = fileno(private->descriptor);
   if(fid == -1){
     logEvent("Error", "Failed to get integer file descriptor");
@@ -220,12 +229,10 @@ static int *dfRead(diskFileObject *this, void** outBuffer, uint32_t bytesToRead,
     logEvent("Error", "Failed to memory map file to write to");
     return 0;
   }
+    
+  memcpy(outBuffer, mapAddr, bytesToRead); 
   
-  *outBuffer = mmapAddr; 
-  
-
-  
-
+  munmap(mapAddr, bytesToRead)
 
   return 1; 
 }
@@ -243,6 +250,11 @@ static int dfOpen(diskFileObject *this, char *path, char *name, char *mode)
   if( private == NULL || this == NULL || path == NULL || name == NULL || mode == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
+  }
+  
+  if( fileModeValid(mode) != 1 ){
+    logEvent("Error", "Invalid file mode specified\n");
+    return 0; 
   }
   
   if( !initializeFileProperties(this, path, name, mode) ){
@@ -266,6 +278,49 @@ static int dfOpen(diskFileObject *this, char *path, char *name, char *mode)
  
   return 1;
 }
+
+
+// static int dfRead(diskFileObject *this, void* outBuffer, uint32_t bytesToRead, uint32_t readOffset)
+//WARNING NOTE TODO to make this mesh with dfRead maxBytes must be a multiple of memory page sizes that are supported
+static uint32_t cacheBytes(diskFileObject *this, uint32_t maxBytes)
+{
+  uint32_t actualBytes;
+  private = (diskFilePrivate *)this;
+  
+  if(private == NULL){
+    logEvent("Error", "Something was NULL that shouldn't have been");
+    return 0;
+  }
+  
+  if( fileModeReadable(private->mode) != 1){
+    logEvent("Error", "File mode must be readable to cache from it"); 
+    return 0; 
+  }
+  
+  if(private->cache != NULL){
+   logEvent("Error", "For now can only cache bytes from a file once");
+   return 0; 
+  }
+  
+  actualBytes = (private->bytesize > maxBytes ) ? maxBytes : private->bytesize; 
+  
+  private->cache = (void *) secureAllocate(actualBytes);
+  if(private->cache == NULL){
+    logEvent("Error", "Failed to allocate memory to cache file");
+    return 0; 
+  }
+  
+  private->cacheBytesize = actualBytes;
+  
+  if( !dfRead(this, private->cache, actualBytesize, 0) ){
+    logEvent("Error", "Failed to read bytes into the cache");
+    return 0;
+  }
+  
+  return actualBytes; 
+}
+
+
 
 
 static uint32_t getBytesize(diskFile *this)

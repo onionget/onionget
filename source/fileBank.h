@@ -1,13 +1,14 @@
 #pragma once
-#include "dataContainer.h"
-#include "dll.h"
 
-struct fileBankPrivate; 
+#include <unistd.h>
+
+#include "diskFile.h"
+
 
 typedef struct fileBankObject{
-  struct fileBankPrivate *privateMembers; 
-  dataContainerObject    *(*getFile)(struct fileBankObject *this, char *filename, uint32_t filenameBytesize);
+  diskFileObject *(*getPointerById)(struct fileBankObject *this, char *requestedId, uint32_t idBytesize);
+  int            (*deposit)(struct fileBankObject *this, diskFileObject *file);
 }fileBankObject;
 
+fileBankObject *newFileBank(uint32_t slots);
 
-fileBankObject *newFileBank(void);
