@@ -10,23 +10,24 @@
 
 #include "router.h"
 #include "memoryManager.h"
-#include "connectionBank.h"
 #include "connection.h"
 #include "diskFile.h"
 #include "server.h"
 #include "ogEnums.h"
 #include "macros.h"
 
-/*
- * Server follows singleton pattern for now
- */
+
+//currently hardcoding pointer array sizes, think of a cleaner way to do this with variable number
+
+static diskFile      *globalFileBank        [MAX_FILES_STORED]; 
+static connection    *globalConnectionBank  [MAX_CONNECTIONS_ALLOWED];   
+static routerObject  *globalServerRouter    = NULL;
 
 
-static   fileBankObject        *globalFileBank         = NULL;
-static   connectionBankObect   *globalConnectionBank   = NULL;
-static   routerObject          *globalServerRouter     = NULL;
-
-
+//
+static pthread_mutex_t connectionDepositLock  = PTHREAD_MUTEX_INITIALIZER; 
+static pthread_mutex_t connectionWithdrawLock = PTHREAD_MUTEX_INITIALIZER;
+//
 
 
 static void *processConnection(void *connectionV);
@@ -37,7 +38,9 @@ static int initializeConnectionProcessing(serverObject *this);
 static int sendFileNotFound(connectionObject *connection);
 static uint32_t sendNextRequestedFile(connectionObject *connection);
 
-
+static int initializeConnectionBank(void);
+static connectionObject *withdrawConnection(void);
+static int depositConnection(connectionObject *connection);
 
 //singleton 
 
@@ -55,12 +58,9 @@ static uint32_t sendNextRequestedFile(connectionObject *connection);
  * returns pointer to server object on success, pointer to NULL on error
  */
 
-uint32_t maxMemoryCacheMegabytes, uint32_t maxSharedFiles, char *sharedFolderPath;
 
-
-serverObject *newServer(void) //TODO NOTE: Intrinsic differences between routerBank and fileBank make them perhaps not suited for the same back end, however for now they will use it...
+serverObject *newServer(void) 
 {
-  
   serverObject *this = (serverObject *)secureAllocate(sizeof(*this));
   if(this == NULL){ 
     logEvent("Error", "Failed to allocate memory to instantiate server");
@@ -68,7 +68,6 @@ serverObject *newServer(void) //TODO NOTE: Intrinsic differences between routerB
   }
   
   
-
   //initialize public methods
   this->initialize = &initialize; 
   
@@ -84,7 +83,7 @@ serverObject *newServer(void) //TODO NOTE: Intrinsic differences between routerB
 
 
 //TODO consider dependency injecting router and connection bank etc (TODO just dependency inject all of this from controller and do sanity check there, but for now put it here) 
-static int initializeNetworking(char *bindAddress, int listenPort, uint32_t connectionSlots)
+static int initializeNetworking(char *bindAddress, int listenPort)
 {
   if(bindAddress == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
@@ -103,8 +102,11 @@ static int initializeNetworking(char *bindAddress, int listenPort, uint32_t conn
   
   //BRO DO YOU EVEN DEPENDENCY INJECT?
   globalServerRouter   = newRouter();
-  globalConnectionBank = newConnectionBank();
-  while(connectionSlots--) globalConnectionBank->deposit(newConnection()); 
+  
+  if( !initializeConnectionBank() ){
+    logEvent("Error", "Failed to initialize the connection bank"); 
+    return 0;
+  }
   
   if( !globalServerRouter->ipv4Listen( globalServerRouter, bindAddress, listenPort )){
     logEvent("Error", "Failed to set server in a listening state");
@@ -133,7 +135,7 @@ static int initializeConnectionProcessing(void)
   
   while(1){     
     //keep trying to get an available connection
-    while( !(availableConnection = globalConnectionBank->withdraw(globalConnectionBank)) ){ //NOTE wtf I don't think I actually need a mutex on withdraw only one thread accesses it
+    while( !(availableConnection = withdrawConnection()) ){ //NOTE wtf I don't think I actually need a mutex on withdraw only one thread accesses it
       //block until a connecting client needs the available router (TODO make sure globalServerRouter doesn't need error checking...)
       if( !availableConnection->router->setSocket(availableConnection->router, globalServerRouter->getConnection(globalServerRouter)) ){
 	logEvent("Error", "Failed to set connection socket");
@@ -202,7 +204,7 @@ static void *processConnection(void *connectionV)
       return NULL; 
     }
        
-    globalConnectionBank->deposit(connection); 
+    depositConnection(connection); 
     return NULL;  
 }
   
@@ -256,7 +258,7 @@ static uint32_t sendNextRequestedFile(connectionObject *connection)
   
   
   for(bytesAlreadyRead = 0, bytesToRead = 0; bytesAlreadyRead < fileBytesize; bytesAlreadyRead += bytesToRead){
-    bytesToRead = ( (fileBytesize - bytesAlreadyRead) < FILE_CHUNK_BYTESIZE ? (fileBytesize - bytesAlreadyRead) : FILE_CHUNK_BYTESIZE; 
+    bytesToRead = ( (fileBytesize - bytesAlreadyRead) < FILE_CHUNK_BYTESIZE ) ? (fileBytesize - bytesAlreadyRead) : FILE_CHUNK_BYTESIZE; 
   
     if( !outgoingFile->dfRead(outgoingFile, connection->dataCache, bytesToRead, bytesAlreadyRead) ){
       logEvent("Error", "Failed to read file bytes");
@@ -372,4 +374,53 @@ int prepareSharedFiles(serverObject *this)
   }
   
   return 1; 
+}
+
+
+
+
+
+
+//connection bank functions
+static int initializeConnectionBank(void)
+{
+  uint32_t fill       = MAX_CONNECTIONS_ALLOWED;
+  uint32_t errorCheck = MAX_CONNECTIONS_ALLOWED;
+  while(fill--) globalConnectionBank[fill] = newConnection(); 
+  while(errorCheck--) if(globalConnectionBank[errorCheck] == NULL) return 0;  
+  return 1; 
+}
+
+
+static connectionObject *withdrawConnection(void)
+{
+  pthread_mutex_lock(&connectionWithdrawLock); 
+  uint32_t         check   = MAX_CONNECTIONS_ALLOWED;
+  connectionObject *holder = NULL; 
+  while(check--){
+    if(globalConnectionBank[check] != NULL){
+      holder = globalConnectionBank[check];
+      globalConnectionBank[check] = NULL;
+      pthread_mutex_unlock(&connectionWithdrawLock); 
+      return holder; 
+    }
+  }
+  pthread_mutex_unlock(&connectionWithdrawLock); 
+  return NULL; 
+}
+
+
+static int depositConnection(connectionObject *connection)
+{
+  pthread_mutex_lock(&connectionDepositLock); 
+  uint32_t slots = MAX_CONNECTIONS_ALLOWED; 
+  while(slots--){
+    if(globalConnectionBank[slots] == NULL){ 
+      globalConnectionBank[slots] = connection;
+      pthread_mutex_unlock(&connectionDepositLock); 
+      return 1;
+    }
+  }
+  pthread_mutex_unlock(&connectionDepositLock);
+  return 0;
 }
