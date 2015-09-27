@@ -17,39 +17,50 @@
 #include "macros.h"
 
 
+
+//GLOBAL VARIABLES
 //currently hardcoding pointer array sizes, think of a cleaner way to do this with variable number
-
-static diskFile      *globalFileBank          [MAX_FILES_STORED]; 
-static connection    *globalConnectionBank    [MAX_CONNECTIONS_ALLOWED];   
-static routerObject  *globalServerRouter      = NULL;
-static uint32_t      globalMaxCacheBytes      = 0;
-
-
+static diskFileObject      *globalFileBank          [MAX_FILES_SHARED]; 
+static connectionObject    *globalConnectionBank    [MAX_CONNECTIONS_ALLOWED];   
+static routerObject        *globalServerRouter      = NULL;
+static uint32_t            globalMaxCacheBytes      = 0;
 //
+
+
+//THREAD SAFETY LOCKS
 static pthread_mutex_t connectionDepositLock  = PTHREAD_MUTEX_INITIALIZER; 
 static pthread_mutex_t connectionWithdrawLock = PTHREAD_MUTEX_INITIALIZER;
-
-static pthread_mutex_t fileDepositLock  = PTHREAD_MUTEX_INITIALIZER; 
-static pthread_mutex_t fileWithdrawLock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t fileDepositLock        = PTHREAD_MUTEX_INITIALIZER; 
+static pthread_mutex_t fileWithdrawLock       = PTHREAD_MUTEX_INITIALIZER;
 //
 
 
+//PUBLIC METHODS
+static int beginOperation(const char *sharedFolderPath, uint32_t maxCacheMegabytes, char *bindAddress, char *listenPort);
+//
+
+
+//PRIVATE METHODS
+static int listenForConnections(void);
+static int initializeSharedFiles(const char *sharedFolderPath, uint32_t maxCacheMegabytes);
+static int initializeNetworking(char *bindAddress, char *listenPort);
 static void *processConnection(void *connectionV);
-int prepareSharedFiles(serverObject *this);
-static int initializeConnectionProcessing(serverObject *this);
-
-
-static int sendFileNotFound(connectionObject *connection);
 static uint32_t sendNextRequestedFile(connectionObject *connection);
+static int sendFileNotFound(connectionObject *connection);
+//
 
-//BANK FUNCTIONS
-static int depositConnection(connectionObject *connection);
-static connectionObject *withdrawConnection(void);
-static int initializeConnectionBank(void);
-static diskFileObject *getFileById(char *id, uint32_t idBytesize);
-static int depositFile(diskFileObject *file);
+
+
+//PRIVATE BANK METHODS
 static void initializeFileBank(void);
-////
+static int depositFile(diskFileObject *file);
+static diskFileObject *getFileById(char *id, uint32_t idBytesize);
+static int initializeConnectionBank(void);
+static connectionObject *withdrawConnection(void);
+static int depositConnection(connectionObject *connection);
+//
+
+
 
 //singleton 
 
@@ -76,13 +87,9 @@ serverObject *newServer(void)
     return NULL; 
   }
   
-  
   //initialize public methods
-  this->initialize = &initialize; 
-  
-  this->initializeConnectionProccessing    = &initializeConnectionProcessing; 
-  this->initializeFileCache                = &prepareSharedFiles;
-  this->initializeNetworking               = &initializeNetworking; 
+  this->beginOperation = &beginOperation; 
+
   
    
   return this;
@@ -90,16 +97,46 @@ serverObject *newServer(void)
 
 
 
-
-//TODO consider dependency injecting router and connection bank etc (TODO just dependency inject all of this from controller and do sanity check there, but for now put it here) 
-static int initializeNetworking(char *bindAddress, int listenPort)
+static int beginOperation(const char *sharedFolderPath, uint32_t maxCacheMegabytes, char *bindAddress, char *listenPort)
 {
-  if(bindAddress == NULL){
+  if(sharedFolderPath == NULL || bindAddress == NULL || listenPort == NULL){ //TODO NOTE sanity check maxCachebytesize here?
+    logEvent("Error", "Failed to initialize server");
+    return 0; 
+  }
+  
+  if( !initializeNetworking(bindAddress, listenPort) ){
+    logEvent("Error", "Failed to initialize server");
+    return 0;
+  }
+  
+  if( !initializeSharedFiles(sharedFolderPath, maxCacheMegabytes) ){
+    logEvent("Error", "Failed to initialize server");
+    return 0; 
+  }
+  
+  if( !listenForConnections() ){ 
+    logEvent("Error", "Failed to start server");
+    return 0;
+  }
+  
+  //Note that this function will never return on success
+  return 1; 
+}
+
+
+
+static int initializeNetworking(char *bindAddress, char *listenPort)
+{
+  int intPort = 0;
+  
+  if(bindAddress == NULL || listenPort == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
   
-  if( strlen(listenPort) > 5 || strtol(listenPort, NULL, 10) > HIGHEST_VALID_PORT){
+  intPort = (int) strtol(listenPort, NULL, 10); //TODO check conversion safety WARNING
+  
+  if( strlen(listenPort) > 5 || intPort > HIGHEST_VALID_PORT){
    logEvent("Error", "Listen port must be at or below 65535");
    return 0; 
   }
@@ -109,7 +146,7 @@ static int initializeNetworking(char *bindAddress, int listenPort)
     return 0;
   }
   
-  //BRO DO YOU EVEN DEPENDENCY INJECT?
+  //BRO DO YOU EVEN DEPENDENCY INJECT? TODO 
   globalServerRouter   = newRouter();
   
   if( !initializeConnectionBank() ){
@@ -117,7 +154,7 @@ static int initializeNetworking(char *bindAddress, int listenPort)
     return 0;
   }
   
-  if( !globalServerRouter->ipv4Listen( globalServerRouter, bindAddress, listenPort )){
+  if( !globalServerRouter->ipv4Listen( globalServerRouter, bindAddress, intPort )){
     logEvent("Error", "Failed to set server in a listening state");
     return 0; 
   }
@@ -127,12 +164,71 @@ static int initializeNetworking(char *bindAddress, int listenPort)
 
 
 
+static int initializeSharedFiles(const char *sharedFolderPath, uint32_t maxCacheMegabytes)
+{
+  uint32_t            availableCacheBytes; 
+  uint32_t            fileBytesCached; 
+  DIR                 *directory; 
+  struct dirent       *fileEntry; 
+  diskFileObject      *diskFile; 
 
+  if(sharedFolderPath == NULL){
+    logEvent("Error", "Something was NULL that shouldn't have been");
+    return 0;
+  }
+  
+  initializeFileBank();
+  
+  //simple unsigned integer wrap protection, limits cache to slightly over four gigabytes
+  if(maxCacheMegabytes > UINT32_MAX / BYTES_IN_A_MEGABYTE){
+    logEvent("Error", "maximum cache megabyte size supported is (UINT32_MAX / BYTES_IN_A_MEGABYTE), as cache is internally stored in bytes in a uint32_t");   
+    return 0; 
+  }
+  else{
+    globalMaxCacheBytes = maxCacheMegabytes * BYTES_IN_A_MEGABYTE;
+  }
+  
+  availableCacheBytes = globalMaxCacheBytes; 
 
-/************ PUBLIC METHODS *************/
+  
+  directory = opendir( sharedFolderPath );
+  if(directory == NULL){
+    logEvent("Error", "Failed to open shared folder");
+    return 0;
+  }
+  
+  while((fileEntry = readdir(directory))){
+    
+    if( !strcmp(fileEntry->d_name, ".") || !strcmp(fileEntry->d_name, "..") ){
+      continue;
+    }
+    
+    diskFile = newDiskFile();
+    if(diskFile == NULL){
+      logEvent("Error", "Failed to create diskFile object");
+      return 0; 
+    }
+    
+   if( !diskFile->dfOpen(diskFile, sharedFolderPath, fileEntry->d_name, "r") ){ //TODO make consts in accordance with cert (everywhere)
+      logEvent("Error", "Failed to open file on disk");
+      return 0; 
+    }
+    
+    fileBytesCached = diskFile->cacheBytes(diskFile, FILE_CHUNK_BYTESIZE); //TODO we need to switch from a byte paradigm to a file chunk paradigm to ensure compatibility with mmap page sizes, don't keep track of max cached bytes but rather max cached file chunks, this cache is too small
+    availableCacheBytes -= fileBytesCached; //BROKEN WARNING SEE ABOVE TODO                                                                       //and should be available cache bytes TODO TODO TODO TODO TODO TODO BROKEN WARNING
+    
+    if( depositFile(diskFile) != 1){
+      logEvent("Error", "Failed to deposit a file into shared file bank, does the shared folder have too many files in it?");
+      return 0;
+    }
+  }
+
+  return 1; 
+}
+
 
 //returns 0 on error, otherwise doesn't return
-static int initializeConnectionProcessing(void)
+static int listenForConnections(void)
 {
   pthread_t        processingThread;
   connectionObject *availableConnection; 
@@ -158,9 +254,7 @@ static int initializeConnectionProcessing(void)
       
     }
   }
-  
 }
-
 
 
 
@@ -218,14 +312,16 @@ static void *processConnection(void *connectionV)
 }
   
   
+  
+  
 //returns bytesize of sent filename (or -1 on error); 
 static uint32_t sendNextRequestedFile(connectionObject *connection)
 {
-  uint32_t filenameBytesize = 0;
-  diskFile *outgoingFile    = NULL; 
-  uint32_t bytesAlreadyRead       = 0; 
-  uint32_t byteToRead      = 0; 
-  uint32_t  fileBytesize     = 0; //TODO eventually make uint64_t + support this in networking + client + server +disklfile etc, switch to 64 bit eventually (used many spots make sure to change all when I do it)...
+  uint32_t       filenameBytesize = 0;
+  diskFileObject *outgoingFile    = NULL; 
+  uint32_t       bytesAlreadyRead = 0; 
+  uint32_t       bytesToRead      = 0; 
+  uint32_t       fileBytesize     = 0; //TODO eventually make uint64_t + support this in networking + client + server +disklfile etc, switch to 64 bit eventually (used many spots make sure to change all when I do it)...
   
   if(connection == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
@@ -247,8 +343,7 @@ static uint32_t sendNextRequestedFile(connectionObject *connection)
   }
      
   //random NOTE (Stop relying on strlen for anything anywhere)
-  
-  outgoingFile = globalFileBank->getPointerById(connection->requestedFilename, filenameBytesize); 
+  outgoingFile = getFileById(connection->requestedFilename, filenameBytesize); 
   if(!outgoingFile && !sendFileNotFound(connection)){
     logEvent("Error", "Failed to send file not found to client");
     goto error; 
@@ -289,6 +384,7 @@ static uint32_t sendNextRequestedFile(connectionObject *connection)
   
   
   
+
 static int sendFileNotFound(connectionObject *connection)
 {
   if( !connection->router->transmitBytesize( connection->router, strlen("not found") ) ){ 
@@ -303,76 +399,15 @@ static int sendFileNotFound(connectionObject *connection)
 }
 
 
-//returns 0 on error
-int prepareSharedFiles(serverObject *this, uint32_t maxCacheMegabytes)
-{
-  uint32_t            availableCacheBytes; 
-  uint32_t            fileBytesCached; 
-  DIR                 *directory; 
-  struct dirent       *fileEntry; 
-  diskFileObject      *diskFile; 
-  long                currentFileBytesize; 
-  
-  if(this == NULL){
-    logEvent("Error", "Something was NULL that shouldn't have been");
-    return 0;
-  }
-  
-  initializeFileBank();
-  
-  //simple unsigned integer wrap protection, limits cache to slightly over four gigabytes
-  if(maxCacheMegabytes > UINT32_MAX / BYTES_IN_A_MEGABYTE){
-    logEvent("Error", "maximum cache megabyte size supported is (UINT32_MAX / BYTES_IN_A_MEGABYTE), as cache is internally stored in bytes in a uint32_t");   
-    return NULL; 
-  }
-  else{
-    globalMaxCacheBytes = maxCacheMegabytes * BYTES_IN_A_MEGABYTE;
-  }
-  
-  availableCacheBytes = globalMaxCacheBytes; 
 
-  
-  directory = opendir( (const char*) this->sharedFolderPath );
-  if(directory == NULL){
-    logEvent("Error", "Failed to open shared folder");
-    return 0;
-  }
-  
-  while((fileEntry = readdir(directory))){
-    
-    if( !strcmp(fileEntry->d_name, ".") || !strcmp(fileEntry->d_name, "..") ){
-      continue;
-    }
-    
-    diskFile = newDiskFile();
-    if(diskFile == NULL){
-      logEvent("Error", "Failed to create diskFile object");
-      return 0; 
-    }
-    
-   if( !diskFile->dfOpen(diskFile, this->sharedFolderPath, fileEntry->d_name, "r") ){
-      logEvent("Error", "Failed to open file on disk");
-      return 0; 
-    }
-    
-    fileBytesCached = diskFile->cacheBytes(diskFile, FILE_CHUNK_BYTESIZE); //TODO we need to switch from a byte paradigm to a file chunk paradigm to ensure compatibility with mmap page sizes, don't keep track of max cached bytes but rather max cached file chunks, this cache is too small
-    availableCacheBytes -= fileBytesCached; //BROKEN WARNING SEE ABOVE TODO                                                                       //and should be available cache bytes TODO TODO TODO TODO TODO TODO BROKEN WARNING
-    
-    if( depositFile(diskFile) != 1){
-      logEvent("Error", "Failed to deposit a file into shared file bank, does the shared folder have too many files in it?");
-      return 0;
-    }
-  }
 
-  return 1; 
-}
 
 
 
 //file bank functions
 static void initializeFileBank(void)
 {
-  uint32_t fill = MAX_FILES_STORED;
+  uint32_t fill = MAX_FILES_SHARED;
   while(fill--) globalConnectionBank[fill] = NULL;
 }
 
@@ -383,7 +418,7 @@ static int depositFile(diskFileObject *file)
     return -1; 
   }
   pthread_mutex_lock(&fileDepositLock);
-  uint32_t slots = MAX_FILES_STORED;
+  uint32_t slots = MAX_FILES_SHARED;
   while(slots--){
    if(globalFileBank[slots] == NULL){
      globalFileBank[slots] = file;
@@ -399,8 +434,7 @@ static diskFileObject *getFileById(char *id, uint32_t idBytesize)
 {
   pthread_mutex_lock(&fileWithdrawLock);
   
-  diskFileObject *filePointer = NULL; 
-  uint32_t       slots        = MAX_FILES_STORED;
+  uint32_t slots = MAX_FILES_SHARED;
   
   if(id == NULL || idBytesize == 0){
     logEvent("Error", "Something was NULL that shouldn't have been");

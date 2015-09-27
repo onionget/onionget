@@ -8,6 +8,7 @@
 #include "router.h"
 #include "ogEnums.h"
 #include "macros.h"
+#include "memoryManager.h"
 
 
 static int reinitialize(connectionObject *this);
@@ -47,7 +48,7 @@ static int reinitialize(connectionObject *this)
     return 0; 
   }
   
-  if( !memoryClear(this->dataCache, FILE_CHUNK_BYTESIZE ){
+  if( !memoryClear(this->dataCache, FILE_CHUNK_BYTESIZE ) ){
     logEvent("Error", "Failed to clear client memory cache");
     return 0; 
   }

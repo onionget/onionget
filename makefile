@@ -1,6 +1,6 @@
 name=onionGet
 CC=gcc
-CFLAGS = -lpthread  -Wall -I. -o $(name)
+CFLAGS = -lpthread -lcap -Wall -I. -o $(name)
 
 VPATH=source
 

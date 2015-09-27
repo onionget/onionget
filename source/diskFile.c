@@ -19,7 +19,7 @@ typedef struct diskFilePrivate{
   uint32_t       fullPathBytesize; 
   uint32_t       bytesize; 
   FILE           *descriptor; 
-  void           *cache; 
+  unsigned char  *cache; 
   uint32_t       cacheBytesize; 
   char           *name;
 }diskFilePrivate;
@@ -27,17 +27,19 @@ typedef struct diskFilePrivate{
 
 //PUBLIC METHODS
 static uint32_t              dfWrite(diskFileObject *this, void *dataBuffer, size_t bytesize, uint32_t writeOffset); 
-static int                   dfRead(diskFileObject *this, uint32_t bytesToRead, uint32_t readOffset);
+static int                   dfRead(diskFileObject *this, void* outBuffer, uint32_t bytesToRead, uint32_t readOffset);
 static int                   closeTearDown(diskFileObject **thisPointer);
 static uint32_t              dfBytesize(diskFileObject *this);
-static int                   dfOpen(diskFileObject *this, char *path, char *name, char *mode);
+static int                   dfOpen(diskFileObject *this, const char *path, char *name, char *mode);
+static uint32_t              cacheBytes(diskFileObject *this, uint32_t maxBytes);
+static uint32_t              getBytesize(diskFileObject *this);
 
 //PRIVATE METHODS
 static int fileModeReadable(char *mode);
 static int fileModeWritable(char *mode);
 static int fileModeValid(char *mode);
 static int fileModeSeekable(char *mode); 
-static int initializeFileProperties(diskFileObject *this, char *path, char *name, char *mode);
+static int initializeFileProperties(diskFileObject *this, const char *path, char *name, char *mode);
 char *getFilename(diskFileObject *this);
 
 
@@ -71,6 +73,7 @@ diskFileObject *newDiskFile(void)
   privateThis->publicDiskFile.closeTearDown   = &closeTearDown;
   privateThis->publicDiskFile.getBytesize     = &getBytesize;
   privateThis->publicDiskFile.getFilename     = &getFilename; 
+  privateThis->publicDiskFile.cacheBytes      = &cacheBytes; 
   
 
   //initialize private properties 
@@ -238,15 +241,15 @@ static int dfRead(diskFileObject *this, void* outBuffer, uint32_t bytesToRead, u
   }
 
   //TODO check that readOffset is divisible by sysconf(_SC_PAGE_SIZE) (currently hard coded as sanity check in controller) (this will be irrelevant if we support arbitrary page sizes)
-  mmapAddr = mmap(*outBuffer, bytesToRead, PROT_READ, MAP_PRIVATE | MAP_LOCKED, fid , readOffset); //NOTE need to mlock stillread mmap man pages
-  if( mappedMemory == MAP_FAILED){
+  mmapAddr = mmap(outBuffer, bytesToRead, PROT_READ, MAP_PRIVATE | MAP_LOCKED, fid , readOffset); //NOTE need to mlock stillread mmap man pages
+  if( mmapAddr == MAP_FAILED){
     logEvent("Error", "Failed to memory map file to write to");
     return 0;
   }
     
-  memcpy(outBuffer, mapAddr, bytesToRead); 
+  memcpy(outBuffer, mmapAddr, bytesToRead); 
   
-  munmap(mapAddr, bytesToRead)
+  munmap(mmapAddr, bytesToRead);
 
   return 1; 
 }
@@ -255,7 +258,7 @@ static int dfRead(diskFileObject *this, void* outBuffer, uint32_t bytesToRead, u
 /*
  * dfOpen returns 0 on error and 1 on success. Sets this->descriptor to an fd for file at this->fullPath opened in mode mode, and sets this->mode to mode. 
  */
-static int dfOpen(diskFileObject *this, char *path, char *name, char *mode)
+static int dfOpen(diskFileObject *this, const char *path, char *name, char *mode)
 {
   diskFilePrivate *private = NULL; 
   
@@ -285,7 +288,7 @@ static int dfOpen(diskFileObject *this, char *path, char *name, char *mode)
   
   
   if( fileModeSeekable(private->mode) == 1 ){ 
-    private->bytesize = this->dfBytesize(this); 
+    private->bytesize = dfBytesize(this); 
     if(private->bytesize == -1){
       logEvent("Error", "Failed to determine file bytesize");
       return 0; 
@@ -302,7 +305,7 @@ static int dfOpen(diskFileObject *this, char *path, char *name, char *mode)
 static uint32_t cacheBytes(diskFileObject *this, uint32_t maxBytes)
 {
   uint32_t actualBytes;
-  private = (diskFilePrivate *)this;
+  diskFilePrivate *private = (diskFilePrivate *)this;
   
   if(private == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
@@ -329,7 +332,7 @@ static uint32_t cacheBytes(diskFileObject *this, uint32_t maxBytes)
   
   private->cacheBytesize = actualBytes;
   
-  if( !dfRead(this, private->cache, actualBytesize, 0) ){
+  if( !dfRead(this, private->cache, actualBytes, 0) ){
     logEvent("Error", "Failed to read bytes into the cache");
     return 0;
   }
@@ -340,9 +343,9 @@ static uint32_t cacheBytes(diskFileObject *this, uint32_t maxBytes)
 
 
 
-static uint32_t getBytesize(diskFile *this)
+static uint32_t getBytesize(diskFileObject *this)
 {
-  diskFileprivate *private = (diskFilePrivate *)this;
+  diskFilePrivate *private = (diskFilePrivate *)this;
   
   if(private == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
@@ -391,7 +394,7 @@ static uint32_t dfBytesize(diskFileObject *this)
     return -1; 
   }
   
-  return (uint32_t)fileBytesize; //TODO need to go over all interger usage and make sure it is not screwing up anywhere, for now just hoping this is working correctly WARNING (WARNING long is more bytes than uint32_t so truncation is certain for large values this is a security problem but leaving for now) TODO TODO TODO
+  return (uint32_t)fileBytesize; //TODO need to go over all integer usage and make sure it is not screwing up anywhere, for now just hoping this is working correctly WARNING (WARNING long is more bytes than uint32_t so truncation is certain for large values this is a security problem but leaving for now) TODO TODO TODO
 }
 
 
@@ -399,7 +402,7 @@ static uint32_t dfBytesize(diskFileObject *this)
 /*
  * initializeFileProperties returns 0 on error and 1 on success.  
  */
-int initializeFileProperties(diskFileObject *this, char *path, char *name, char *mode)
+int initializeFileProperties(diskFileObject *this, const char *path, char *name, char *mode)
 {
   diskFilePrivate  *private     = NULL;
   size_t           pathBytesize = 0;

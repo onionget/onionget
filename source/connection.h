@@ -4,7 +4,7 @@ typedef struct connectionObject{
   routerObject *router;
   char         *requestedFilename;
   char         *dataCache; 
-  int          (*reinitialize)(struct connectionObject this); 
+  int          (*reinitialize)(struct connectionObject *this); 
 }connectionObject;
 
 

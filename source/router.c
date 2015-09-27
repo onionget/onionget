@@ -19,6 +19,7 @@
 #include "router.h"
 #include "memoryManager.h"
 #include "ogEnums.h"
+#include "macros.h"
 
 //private internal values 
 typedef struct routerPrivate{
@@ -26,7 +27,7 @@ typedef struct routerPrivate{
   int            socket; 
 }routerPrivate;
 
-receive(routerObject *this, void *receiveBuffer, uint32_t payloadBytesize)
+
 //public methods
 static int                  receive             ( routerObject *this            , void *receiveBuffer        , uint32_t payloadBytesize                        );
 static int                  transmit            ( routerObject *this            , void *payload              , uint32_t payloadBytesize                        );
@@ -79,7 +80,7 @@ routerObject *newRouter(void)
   privateThis->publicRouter.getConnection         = &getConnection;
   privateThis->publicRouter.setSocket             = &setSocket; 
   privateThis->publicRouter.destroyRouter         = &destroyRouter;
-  pritvateThis->publicRouter.reinitialize         = &reinitialize; 
+  privateThis->publicRouter.reinitialize          = &reinitialize; 
   
   
   //initialize private properties
@@ -166,7 +167,7 @@ static int receive(routerObject *this, void *receiveBuffer, uint32_t payloadByte
   }
     
   for(bytesReceived = 0, recvReturn = 0; bytesReceived != payloadBytesize; bytesReceived += recvReturn){
-    recvReturn = recv(private->socket, &receiveBuffer[bytesReceived], payloadBytesize - bytesReceived, 0);     
+    recvReturn = recv(private->socket, &((unsigned char*)receiveBuffer)[bytesReceived], payloadBytesize - bytesReceived, 0);    //TODO look into this cast from void* 
     if(recvReturn == -1 || recvReturn == 0){ 
       logEvent("Error", "Failed to receive bytes");
       return 0; 

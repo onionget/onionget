@@ -1,9 +1,7 @@
 #pragma once
-#include "router.h"
-#include "dll.h"
 
 typedef struct serverObject{
-  int (*processConnections)(struct serverObject *this); 
+  int (*beginOperation)(const char *sharedFolderPath, uint32_t maxCacheBytesize, char *bindAddress, char *listenPort); 
 }serverObject;
 
 

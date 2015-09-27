@@ -243,7 +243,7 @@ static int getIncomingFile(clientObject *this, diskFileObject *diskFile)
     bytesToGet = (incomingFileBytesize <= FILE_CHUNK_BYTESIZE) ? incomingFileBytesize : FILE_CHUNK_BYTESIZE; 
         
     //get up to FILE_CHUNK_BYTESIZE bytes of the file
-    if( !private->router->receive(private->router, incomingFileChunk, bytesToGet){
+    if( !private->router->receive(private->router, incomingFileChunk, bytesToGet) ){
       memoryClear(incomingFileChunk, FILE_CHUNK_BYTESIZE);
       logEvent("Error", "Failed to receive data chunk");
       return 0; // TODO good error checking soon (plus wipe)
