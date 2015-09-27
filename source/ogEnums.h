@@ -55,5 +55,3 @@ enum{ RECEIVE_WAIT_TIMEOUT_USECS   = 0  };
 enum{  MAX_REQUEST_STRING_BYTESIZE = 1000000   };
 enum{  BYTES_IN_A_MEGABYTE         = 1000000   }; 
 enum{  MAX_FILE_ID_BYTESIZE        = 200       }; //todo make this saner
-enum{  MAX_FILES_SHARED            = 1000      };
-enum{  MAX_CONNECTIONS_ALLOWED     = 1000      }; 

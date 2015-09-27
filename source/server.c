@@ -20,10 +20,12 @@
 
 //GLOBAL VARIABLES
 //currently hardcoding pointer array sizes, think of a cleaner way to do this with variable number
-static diskFileObject      *globalFileBank          [MAX_FILES_SHARED]; 
-static connectionObject    *globalConnectionBank    [MAX_CONNECTIONS_ALLOWED];   
+static diskFileObject      **globalFileBank         = NULL;  
+static connectionObject    **globalConnectionBank   = NULL; 
 static routerObject        *globalServerRouter      = NULL;
 static uint32_t            globalMaxCacheBytes      = 0;
+static uint32_t            globalMaxConnections     = 0;
+static uint32_t            globalMaxSharedFiles     = 0; 
 //
 
 
@@ -36,7 +38,7 @@ static pthread_mutex_t fileWithdrawLock       = PTHREAD_MUTEX_INITIALIZER;
 
 
 //PUBLIC METHODS
-static int beginOperation(const char *sharedFolderPath, uint32_t maxCacheMegabytes, char *bindAddress, char *listenPort);
+static int serve(const char *sharedFolderPath, uint32_t maxCacheMegabytes, char *bindAddress, char *listenPort);
 //
 
 
@@ -52,10 +54,8 @@ static int sendFileNotFound(connectionObject *connection);
 
 
 //PRIVATE BANK METHODS
-static void initializeFileBank(void);
 static int depositFile(diskFileObject *file);
 static diskFileObject *getFileById(char *id, uint32_t idBytesize);
-static int initializeConnectionBank(void);
 static connectionObject *withdrawConnection(void);
 static int depositConnection(connectionObject *connection);
 //
@@ -79,7 +79,7 @@ static int depositConnection(connectionObject *connection);
  */
 
 
-serverObject *newServer(void) 
+serverObject *newServer(routerObject *router, diskFileObject** fileBank, uint32_t maxSharedFiles, connectionObject** connectionBank, uint32_t maxConnections) 
 {
   serverObject *this = (serverObject *)secureAllocate(sizeof(*this));
   if(this == NULL){ 
@@ -88,8 +88,12 @@ serverObject *newServer(void)
   }
   
   //initialize public methods
-  this->beginOperation = &beginOperation; 
+  this->serve = &serve; 
 
+  //dependency injections
+  globalServerRouter   = router; 
+  globalFileBank       = fileBank;
+  globalConnectionBank = connectionBank; 
   
    
   return this;
@@ -97,7 +101,7 @@ serverObject *newServer(void)
 
 
 
-static int beginOperation(const char *sharedFolderPath, uint32_t maxCacheMegabytes, char *bindAddress, char *listenPort)
+static int serve(const char *sharedFolderPath, uint32_t maxCacheMegabytes, char *bindAddress, char *listenPort)
 {
   if(sharedFolderPath == NULL || bindAddress == NULL || listenPort == NULL){ //TODO NOTE sanity check maxCachebytesize here?
     logEvent("Error", "Failed to initialize server");
@@ -115,7 +119,7 @@ static int beginOperation(const char *sharedFolderPath, uint32_t maxCacheMegabyt
   }
   
   if( !listenForConnections() ){ 
-    logEvent("Error", "Failed to start server");
+    logEvent("Error", "Failed to serve server");
     return 0;
   }
   
@@ -146,8 +150,6 @@ static int initializeNetworking(char *bindAddress, char *listenPort)
     return 0;
   }
   
-  //BRO DO YOU EVEN DEPENDENCY INJECT? TODO 
-  globalServerRouter   = newRouter();
   
   if( !initializeConnectionBank() ){
     logEvent("Error", "Failed to initialize the connection bank"); 
@@ -405,11 +407,7 @@ static int sendFileNotFound(connectionObject *connection)
 
 
 //file bank functions
-static void initializeFileBank(void)
-{
-  uint32_t fill = MAX_FILES_SHARED;
-  while(fill--) globalConnectionBank[fill] = NULL;
-}
+
 
 static int depositFile(diskFileObject *file)
 {
@@ -418,7 +416,7 @@ static int depositFile(diskFileObject *file)
     return -1; 
   }
   pthread_mutex_lock(&fileDepositLock);
-  uint32_t slots = MAX_FILES_SHARED;
+  uint32_t slots = globalMaxSharedFiles;
   while(slots--){
    if(globalFileBank[slots] == NULL){
      globalFileBank[slots] = file;
@@ -434,7 +432,7 @@ static diskFileObject *getFileById(char *id, uint32_t idBytesize)
 {
   pthread_mutex_lock(&fileWithdrawLock);
   
-  uint32_t slots = MAX_FILES_SHARED;
+  uint32_t slots = globalMaxSharedFiles;
   
   if(id == NULL || idBytesize == 0){
     logEvent("Error", "Something was NULL that shouldn't have been");
@@ -455,20 +453,10 @@ static diskFileObject *getFileById(char *id, uint32_t idBytesize)
 
 
 //connection bank functions
-static int initializeConnectionBank(void)
-{
-  uint32_t fill       = MAX_CONNECTIONS_ALLOWED;
-  uint32_t errorCheck = MAX_CONNECTIONS_ALLOWED;
-  while(fill--) globalConnectionBank[fill] = newConnection(); 
-  while(errorCheck--) if(globalConnectionBank[errorCheck] == NULL) return 0;  
-  return 1; 
-}
-
-
 static connectionObject *withdrawConnection(void)
 {
   pthread_mutex_lock(&connectionWithdrawLock); 
-  uint32_t         check   = MAX_CONNECTIONS_ALLOWED;
+  uint32_t         check   = globalMaxConnections;
   connectionObject *holder = NULL; 
   while(check--){
     if(globalConnectionBank[check] != NULL){
@@ -486,7 +474,7 @@ static connectionObject *withdrawConnection(void)
 static int depositConnection(connectionObject *connection)
 {
   pthread_mutex_lock(&connectionDepositLock); 
-  uint32_t slots = MAX_CONNECTIONS_ALLOWED; 
+  uint32_t slots = globalMaxConnections; 
   while(slots--){
     if(globalConnectionBank[slots] == NULL){ 
       globalConnectionBank[slots] = connection;

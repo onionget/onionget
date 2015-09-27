@@ -3,57 +3,156 @@
 #include <string.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <curses.h>
+#include <signal.h>
+
 
 #include "client.h"
 #include "server.h"
 #include "ogEnums.h" 
+#include "macros.h"
+#include "router.h"
 
 //                            0          1           2                3                   4                      5                                6       7             8+ 
 //client input format :  [./onionGet] [client] [tor bind address] [tor listen port]  [onion address]       [onion port]                    [operation] [save path] [filenames...] 
 //server input format :  [./onionGet] [server] [server address]   [server port]      [shared folder path]  [memory cache megabyte size] 
 
-/*
-static int initializeClient(int argc, char *argv[]);
-static int clientOperationValid(char* operation);
-static int clientSanityCheck(char *onionPort, char *onionAddress, char *operation);
-static int showHelpExit(void);
-static int serverSanityCheck(int argc, char *bindAddress, char *listenPort);
-static int initializeServer(int argc, char *argv[]);
-static int systemSanityCheck(); 
-*/
 
-//TODO refactor this to take into account some functions never return, and clean up in general where showhelpexit is and how it works etc
+static int systemSanityCheck(void); 
+static int *clientGetFiles(char *torBindAddress, char *torPort, char *onionAddress, char *onionPort, char *dirPath, char **fileNames, uint32_t fileCount);
+static int serverServeFiles(const char *sharedFolderPath, uint32_t maxCacheMegabytes, char *bindAddress, char *listenPort, uint32_t maxSharedFiles, uint32_t maxConnections);
 
-int main(int argc, char *argv[])
+
+
+//argv[C_TOR_BIND_ADDRESS] == NULL || argv[C_TOR_PORT] == NULL || argv[C_ONION_ADDRESS] == NULL || argv[C_ONION_PORT] == NULL || argv[C_OPERATION] == NULL || argv[C_DIR_PATH] == NULL || argv[C_FIRST_FILE_NAME] == NULL
+
+//  argv[S_BIND_ADDRESS] == NULL || argv[S_LISTEN_PORT] == NULL || argv[S_DIR_PATH] == NULL || argv[S_MEM_MEGA_CACHE] == NULL
+//  strtoll( argv [ S_LISTEN_PORT    ] , NULL , 10 );
+
+
+
+int main()
 {
-  /*
-  int successIndicated = 0; 
+
+  //TODO hunt down sanity checking components and consider putting them here
   
-  if(!systemSanityCheck()){ 
-    logEvent("Error", "System incompatibility detected"); 
-    exit(1);
-  }
-  
-  if      (argc < 2)                                                     showHelpExit(); 
-  else if (!strcmp(argv[CLIENT_OR_SERVER], "client")) successIndicated = initializeClient(argc, argv);
-  else if (!strcmp(argv[CLIENT_OR_SERVER], "server")) successIndicated = initializeServer(argc, argv); 
-  else                                                                   showHelpExit();     
-  
-  if(!successIndicated){
-    logEvent("Error", "Operation Failed");
-    return 0; 
-  }
-  
-  logEvent("Notice", "Operation Completed"); //note that server blocks and will never get here on success
-  */
+
   return 0;
 }
 
 
-/*
+
+/**** Client Initialization Functions ****/
+
+//TODO maybe pass a client in, and implement reinitialization and similar functions for client objects, if other functionalities are intended to be added
+static int *clientGetFiles(char *torBindAddress, char *torPort, char *onionAddress, char *onionPort, char *dirPath, char **fileNames, uint32_t fileCount) //TODO make structs for these and validation functions and new to null etc etc 
+{
+  diskFile     *clientFileInterface; 
+  routerObject *clientRouter;
+  clientObject *client;
+  
+  clientFileInterface = newDiskFile(); 
+  if(clientFileInterface == NULL){
+    logEvent("Error", "Failed to allocate the client file interface");
+    return NULL; 
+  }
+  
+  clientRouter = newRouter();
+  if(clientRouter == NULL){
+    logEvent("Error", "Failed to allocate a router object for the client");
+    return NULL; 
+  }
+  
+  client = newClient(router);
+  if(client == NULL){
+    logEvent("Error", "Failled to allocate a client object");
+    return NULL; 
+  }
+  
+  if( !client->initializeSocks(client, torBindAddress, torPort) ){
+    logEvent("Error", "Failed to initialize socks");
+    return NULL;
+  }
+  
+  if( !client->establishConnection(client, onionAddress, onionPort) ){
+    logEvent("Error", "Failed to establish connection to onion server");
+    return NULL; 
+  }
+  
+  if( !getFiles(client, dirPath, fileNames, fileCount, clientFileInterface) ){
+    logEvent("Error", "Failed to get files from onion server");
+    return NULL; 
+  }
+  
+  return 1;
+}
+
+
+
+/**** Server Initialization Functions *****/ 
+
+//TODO maybe pass a server in, and implement reinitialization and similar functions for server objects (also make non singleton!), if other functionalities are intended to be added
+static int serverServeFiles(const char *sharedFolderPath, uint32_t maxCacheMegabytes, char *bindAddress, char *listenPort, uint32_t maxSharedFiles, uint32_t maxConnections)
+{
+  routerObject     *serverRouter;
+  serverObject     *server; 
+  diskFileObject   *fileBank         [maxSharedFiles];
+  connectionObject *connectionBank   [maxConnections]; 
+  
+  serverRouter = newRouter();
+  if(serverRouter == NULL){
+    logEvent("Error", "Failed to allocate a router object for the server"); 
+  }
+  
+  initializeFileBank(diskFileBank); //never fails
+  
+  if( !initializeConnectionBank(connectionBank) ){
+    logEvent("Error", "Failed to initialize connection bank");
+    return 0;
+  }
+  
+  server = newServer(serverRouter, fileBank, maxSharedFiles, connectionBank, maxConnections);
+  if(server == NULL){
+    logEvent("Error", "Failed to allocate a server object");
+    return 0; 
+  }
+    
+  if( !server->serve(sharedFolderPath, maxCacheMegabytes, bindAddress, listenPort) ){ //NOTE Doesn't return on success
+    logEvent("Error", "Failed to start serving the shared filed");
+    return 0;
+  }
+  
+
+  return 1; //doesn't return on success
+}
+
+
+static void initializeFileBank(fileBankObject **fileBank)
+{
+  uint32_t fill = MAX_FILES_SHARED;
+  while(fill--) fileBank[fill] = NULL;
+}
+
+static int initializeConnectionBank(connectionBankObject **connectionBank)
+{
+  uint32_t fill       = MAX_CONNECTIONS_ALLOWED;
+  uint32_t errorCheck = MAX_CONNECTIONS_ALLOWED;
+  while(fill--) connectionBank[fill] = newConnection(); 
+  while(errorCheck--) if(connectionBank[errorCheck] == NULL) return 0;  
+  return 1; 
+}
+
+
+
+
+
+
+
+//general functions
+
 //NOTE: Because we mmap files for reading and writing, and need to use offsets, and mmap offsets need to be multiples of
 //the system page size, currently only supporting standard page sizes 
-static int systemSanityCheck()
+static int systemSanityCheck(void)
 {
   long pageBytesize;  
   pageBytesize = sysconf(_SC_PAGE_SIZE);
@@ -65,109 +164,3 @@ static int systemSanityCheck()
   
   return 1;
 }
-*/
-
-
-/**** CLIENT FUNCTIONS ***/
-
-/*
-//returns 0 on error
-static int initializeClient(int argc, char *argv[])
-{
-  clientObject   *client;
-  uint64_t       fileCount;
-  
-  if( argv[C_TOR_BIND_ADDRESS] == NULL || argv[C_TOR_PORT] == NULL || argv[C_ONION_ADDRESS] == NULL || argv[C_ONION_PORT] == NULL || argv[C_OPERATION] == NULL || argv[C_DIR_PATH] == NULL || argv[C_FIRST_FILE_NAME] == NULL ){
-    logEvent("Error", "Something was NULL that shouldn't have been");
-    return 0; 
-  } 
-  
-  fileCount = argc - C_FIXED_CLI_INPUTS;
-  
-  if( !clientSanityCheck(argv[C_ONION_PORT], argv[C_ONION_ADDRESS], argv[C_OPERATION]) ){
-    showHelpExit();
-  }
-    
-  client = newClient( argv[C_TOR_BIND_ADDRESS], argv[C_TOR_PORT], argv[C_ONION_ADDRESS], argv[C_ONION_PORT], argv[C_OPERATION], argv[C_DIR_PATH], &argv[C_FIRST_FILE_NAME], fileCount); 
-  
-  
-  if( !client->executeOperation(client) ){
-    logEvent("Error", "Client operation failed");
-    return 0; 
-  }
- 
-  logEvent("Notice", "Client operation success");
-  return 1;
-}
-*/
-
-
-
-
-/*** SERVER FUNCTIONS ****/ 
-
-/*
-
-//TODO check int types not using uint64_t anymore 
-static int initializeServer(int argc, char *argv[])
-{
-  serverObject *server;
-  int          listenPort;
-  uint64_t     maxMemoryCacheMegabytes;
-  
-  if( argv[S_BIND_ADDRESS] == NULL || argv[S_LISTEN_PORT] == NULL || argv[S_DIR_PATH] == NULL || argv[S_MEM_MEGA_CACHE] == NULL){
-    logEvent("Error", "Something was NULL that shouldn't have been");
-    return 0;
-  }
-      
-  if( !serverSanityCheck(argc, argv[S_BIND_ADDRESS], argv[S_LISTEN_PORT]) ){
-    showHelpExit();
-  }
-  
-  listenPort              = (int)      strtoll( argv [ S_LISTEN_PORT    ] , NULL , 10 );
-  maxMemoryCacheMegabytes = (uint64_t) strtoll( argv [ S_MEM_MEGA_CACHE ] , NULL , 10 );
-  
-  
-  server = newServer( argv[S_DIR_PATH], argv[S_BIND_ADDRESS], listenPort, maxMemoryCacheMegabytes );
-  if(server == NULL){
-    logEvent("Error", "Failed to instantiate server object");
-    return 0;
-  }
-  
-  server->serverListen(server); //note blocks forever
-  
-  return 1; 
-}
-
-
-//returns 0 on error 1 on success
-//TODO: Consider regex checks of all server initialization values? NOTE: assumes ipv4 style addresses
-static int serverSanityCheck(int argc, char *bindAddress, char *listenPort)
-{
-  if(bindAddress == NULL || listenPort == NULL){
-    logEvent("Error", "Something was NULL that shouldn't have been");
-    return 0; 
-  }
-  
-  if(argc != S_FIXED_CLI_INPUTS){
-    logEvent("Error", "Invalid number of arguments for server");
-    return 0; 
-  }
-
-  //note moved other checks (bindaddress and listen port) to server.c TODO clean up
-  
-  return 1;
-}
-*/
-
-/**** GENERAL FUNCTIONS *****/
-/*
-static int showHelpExit()
-{
-  printf("\n ------ SYNTAX ------ \n\n");
-  printf("Client Syntax: [./onionGet] [\"client\"] [tor bind address] [tor listen port] [onion address] [onion port] [operation] [save path]\n\n");
-  printf("Client Operations: [\"--get\"] [filenames] ----- gets the files named from the server\n\n");
-  printf("Server Syntax: [./onionGet] [\"server\"] [bind address] [listen port] [shared folder path] [memory cache megabytes (max 4294)]\n\n");
-  exit(0); 
-}
-*/

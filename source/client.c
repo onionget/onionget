@@ -22,7 +22,7 @@ typedef struct clientPrivate{
 
 
 //PUBLIC METHODS
-static int   getFiles(clientObject *this, char *dirPath, char **fileNames, uint32_t fileCount);
+static int   getFiles(clientObject *this, char *dirPath, char **fileNames, uint32_t fileCount, diskFileObject *clientFileInterface);
 static int   initializeSocks(clientObject *this, char *torBindAddress, char *torPort);
 static int   establishConnection(clientObject *this, char *onionAddress, char *onionPort);
 static int   setRouter(clientObject *client, routerObject *router);   
@@ -42,7 +42,7 @@ static int       hsValueSanityCheck(char *onionAddress, char *onionPort);
  * newClient returns a client object on success and NULL on failure
  * 
  */
-clientObject *newClient(void)
+clientObject *newClient(routerObject *router)
 {
   clientPrivate *privateThis = NULL;
   
@@ -57,10 +57,9 @@ clientObject *newClient(void)
   privateThis->publicClient.getFiles            = &getFiles; 
   privateThis->publicClient.establishConnection = &establishConnection; 
   privateThis->publicClient.initializeSocks     = &initializeSocks; 
-  privateThis->publicClient.setRouter           = &setRouter; 
   
   //initialize private properties
-  privateThis->router = NULL;
+  privateThis->router = router;
 
 
   return (clientObject*)privateThis; 
@@ -70,24 +69,6 @@ clientObject *newClient(void)
 
 /************ PUBLIC METHODS ******************/
 
-//TODO destroy function
-
-//returns 0 on error and 1 on success (dependency injection) 
-static int setRouter(clientObject *this, routerObject *router)
-{
-  clientPrivate *private = NULL;
-  
-  private = (clientPrivate *)this;
-  
-  if(private == NULL || this == NULL || router == NULL){
-    logEvent("Error", "Failed to set the clients router");
-    return 0; 
-  }
-  
-  private->router = router;
-  
-  return 1; 
-}
 
 
 //TODO sanity check these values
@@ -149,12 +130,11 @@ static int establishConnection(clientObject *this, char *onionAddress, char *oni
  * getFiles returns 0 on error and 1 on success, it sends the server the file request string, then goes through each file name 
  * and writes it to the disk with the data received from the server for that file name TODO dependency inject diskFile? TODO sanity check dirpath 
  */
-static int getFiles(clientObject *this, char *dirPath, char **fileNames, uint32_t fileCount)
+static int getFiles(clientObject *this, char *dirPath, char **fileNames, uint32_t fileCount, diskFileObject *clientFileInterface)
 {
-  int            currentFile = 0;
-  diskFileObject *diskFile   = NULL; 
+  int currentFile = 0;
   
-  if( this == NULL || dirPath == NULL || fileNames == NULL ){
+  if( this == NULL || dirPath == NULL || fileNames == NULL || clientFileInterface == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
@@ -168,26 +148,19 @@ static int getFiles(clientObject *this, char *dirPath, char **fileNames, uint32_
   //get the files from the server
   for(currentFile = 0; fileCount--; currentFile++){ 
     
-    //first we open a new diskFile to write the file to
-    diskFile = newDiskFile();
-    if(diskFile == NULL){
-      logEvent("Error", "Failed to create new diskFile object");
-      return 0;
-    }
-    
-    if( !diskFile->dfOpen(diskFile, dirPath, fileNames[currentFile], "w") ){
+    if( !clientFileInterface->dfOpen(clientFileInterface, dirPath, fileNames[currentFile], "w") ){
       logEvent("Error", "Failed to open file on disk");
       return 0; 
     }
     
     //then get the incoming file and write it to the disk
-    if( !getIncomingFile(this, diskFile) ){
+    if( !getIncomingFile(this, clientFileInterface) ){
       logEvent("Error", "Failed to get file");
       return 0; 
     }
     
-    //then close the disk file
-    if( !diskFile->closeTearDown(&diskFile) ){
+    //then reinitialize the clientFileInterface
+    if( !clientFileInterace->reinitialize(clientFileInterface) ){ //TODO TODO TODO TODO TODO TODO TODO need to implement this
       logEvent("Error", "Failed to tear down disk file");
       return 0;
     }

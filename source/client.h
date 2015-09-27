@@ -2,15 +2,15 @@
 
 #include <stdint.h>
 #include "router.h"
+#include "diskFile.h"
 
 
 typedef struct clientObject{  
-  int          (*getFiles)(struct clientObject *this, char *dirPath, char **fileNames, uint32_t fileCount);   
+  int          (*getFiles)(struct clientObject *this, char *dirPath, char **fileNames, uint32_t fileCount, diskFileObject *clientFileInterface);   
   int          (*establishConnection)(struct clientObject *this, char *onionAddress, char *onionPort);
-  int          (*setRouter)(struct clientObject *client, routerObject *router);  
   int          (*initializeSocks)(struct clientObject *client, char *torBindAddress, char *torPort);
 }clientObject; 
 
 
-clientObject *newClient(void);
+clientObject *newClient(routerObject *router);
 
