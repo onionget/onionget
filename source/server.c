@@ -19,14 +19,18 @@
 
 //currently hardcoding pointer array sizes, think of a cleaner way to do this with variable number
 
-static diskFile      *globalFileBank        [MAX_FILES_STORED]; 
-static connection    *globalConnectionBank  [MAX_CONNECTIONS_ALLOWED];   
-static routerObject  *globalServerRouter    = NULL;
+static diskFile      *globalFileBank          [MAX_FILES_STORED]; 
+static connection    *globalConnectionBank    [MAX_CONNECTIONS_ALLOWED];   
+static routerObject  *globalServerRouter      = NULL;
+static uint32_t      globalMaxCacheBytes      = 0;
 
 
 //
 static pthread_mutex_t connectionDepositLock  = PTHREAD_MUTEX_INITIALIZER; 
 static pthread_mutex_t connectionWithdrawLock = PTHREAD_MUTEX_INITIALIZER;
+
+static pthread_mutex_t fileDepositLock  = PTHREAD_MUTEX_INITIALIZER; 
+static pthread_mutex_t fileWithdrawLock = PTHREAD_MUTEX_INITIALIZER;
 //
 
 
@@ -38,9 +42,14 @@ static int initializeConnectionProcessing(serverObject *this);
 static int sendFileNotFound(connectionObject *connection);
 static uint32_t sendNextRequestedFile(connectionObject *connection);
 
-static int initializeConnectionBank(void);
-static connectionObject *withdrawConnection(void);
+//BANK FUNCTIONS
 static int depositConnection(connectionObject *connection);
+static connectionObject *withdrawConnection(void);
+static int initializeConnectionBank(void);
+static diskFileObject *getFileById(char *id, uint32_t idBytesize);
+static int depositFile(diskFileObject *file);
+static void initializeFileBank(void);
+////
 
 //singleton 
 
@@ -295,40 +304,42 @@ static int sendFileNotFound(connectionObject *connection)
 
 
 //returns 0 on error
-int prepareSharedFiles(serverObject *this)
+int prepareSharedFiles(serverObject *this, uint32_t maxCacheMegabytes)
 {
-  uint32_t            currentlyCachedBytes;
+  uint32_t            availableCacheBytes; 
+  uint32_t            fileBytesCached; 
   DIR                 *directory; 
   struct dirent       *fileEntry; 
   diskFileObject      *diskFile; 
   long                currentFileBytesize; 
   
-  
-  /*
-   * 
-   *   //simple unsigned integer wrap protection, limits cache to slightly over four gigabytes
-  if(maxMemoryCacheMegabytes > UINT32_MAX / BYTES_IN_A_MEGABYTE){
-    logEvent("Error", "maximum cache megabyte size supported is (UINT32_MAX / BYTES_IN_A_MEGABYTE), as cache is internally stored in bytes in a uint32_t");   
-    return NULL; 
-  }
-  else{
-    privateThis->maxMemoryCacheBytesize = maxMemoryCacheMegabytes * BYTES_IN_A_MEGABYTE;
-  }
-   */
-  
   if(this == NULL){
     logEvent("Error", "Something was NULL that shouldn't have been");
     return 0;
   }
-   
+  
+  initializeFileBank();
+  
+  //simple unsigned integer wrap protection, limits cache to slightly over four gigabytes
+  if(maxCacheMegabytes > UINT32_MAX / BYTES_IN_A_MEGABYTE){
+    logEvent("Error", "maximum cache megabyte size supported is (UINT32_MAX / BYTES_IN_A_MEGABYTE), as cache is internally stored in bytes in a uint32_t");   
+    return NULL; 
+  }
+  else{
+    globalMaxCacheBytes = maxCacheMegabytes * BYTES_IN_A_MEGABYTE;
+  }
+  
+  availableCacheBytes = globalMaxCacheBytes; 
+
+  
   directory = opendir( (const char*) this->sharedFolderPath );
   if(directory == NULL){
     logEvent("Error", "Failed to open shared folder");
     return 0;
   }
   
-  for( currentlyCachedBytes = 0 ; ( fileEntry = readdir(directory) ); ){
-   
+  while((fileEntry = readdir(directory))){
+    
     if( !strcmp(fileEntry->d_name, ".") || !strcmp(fileEntry->d_name, "..") ){
       continue;
     }
@@ -339,45 +350,73 @@ int prepareSharedFiles(serverObject *this)
       return 0; 
     }
     
-    if( !diskFile->dfOpen(diskFile, this->sharedFolderPath, fileEntry->d_name, "r") ){
+   if( !diskFile->dfOpen(diskFile, this->sharedFolderPath, fileEntry->d_name, "r") ){
       logEvent("Error", "Failed to open file on disk");
       return 0; 
     }
     
-    currentFileBytesize = diskFile->dfBytesize(diskFile); 
-    if(currentFileBytesize == -1){
-      logEvent("Error", "Failed to get shared file bytesize");
+    fileBytesCached = diskFile->cacheBytes(diskFile, FILE_CHUNK_BYTESIZE); //TODO we need to switch from a byte paradigm to a file chunk paradigm to ensure compatibility with mmap page sizes, don't keep track of max cached bytes but rather max cached file chunks, this cache is too small
+    availableCacheBytes -= fileBytesCached; //BROKEN WARNING SEE ABOVE TODO                                                                       //and should be available cache bytes TODO TODO TODO TODO TODO TODO BROKEN WARNING
+    
+    if( depositFile(diskFile) != 1){
+      logEvent("Error", "Failed to deposit a file into shared file bank, does the shared folder have too many files in it?");
       return 0;
     }
-    
-    //if adding the file to the cache will exhaust the cache space then don't add it to the linked list
-    if( (currentlyCachedBytes + currentFileBytesize) > this->maxMemoryCacheBytesize ){ //TODO keep track of size of cache in fileBank? TODO make log function work with interpolated strings
-      logEvent("Notice", "Adding file will exhaust available cache, skipping");
-      diskFile->closeTearDown(&diskFile);
-      continue; 
-    }
-    
-    
-
-    /*
-    if( !this->cachedSharedFiles->insert(this->cachedSharedFiles, DLL_HEAD, fileEntry->d_name, strlen(fileEntry->d_name), diskFile->diskFileRead(diskFile, ), diskFile->getBytesize(diskFile), FILE_START) ){
-      printf("Error: Failed to insert file into cached file list!");
-      return 0; 
-    }
-    */
-    
-    currentlyCachedBytes += currentFileBytesize;
-    if(!diskFile->closeTearDown(&diskFile)){
-      logEvent("Error", "Failed to close the disk file");
-      return 0; 
-    }
   }
-  
+
   return 1; 
 }
 
 
 
+//file bank functions
+static void initializeFileBank(void)
+{
+  uint32_t fill = MAX_FILES_STORED;
+  while(fill--) globalConnectionBank[fill] = NULL;
+}
+
+static int depositFile(diskFileObject *file)
+{
+  if(file == NULL){
+    logEvent("Error", "Something was NULL that shouldn't have been");
+    return -1; 
+  }
+  pthread_mutex_lock(&fileDepositLock);
+  uint32_t slots = MAX_FILES_STORED;
+  while(slots--){
+   if(globalFileBank[slots] == NULL){
+     globalFileBank[slots] = file;
+     pthread_mutex_unlock(&fileDepositLock); 
+     return 1;
+   }
+  }
+  pthread_mutex_unlock(&fileDepositLock); 
+  return 0; 
+}
+
+static diskFileObject *getFileById(char *id, uint32_t idBytesize)
+{
+  pthread_mutex_lock(&fileWithdrawLock);
+  
+  diskFileObject *filePointer = NULL; 
+  uint32_t       slots        = MAX_FILES_STORED;
+  
+  if(id == NULL || idBytesize == 0){
+    logEvent("Error", "Something was NULL that shouldn't have been");
+    return NULL; 
+  }
+  
+  while(slots--){
+    if(memcmp(globalFileBank[slots]->getFilename(globalFileBank[slots]), id, idBytesize)){
+      pthread_mutex_unlock(&fileWithdrawLock);
+      return globalFileBank[slots];   
+    }
+  }
+  
+  pthread_mutex_unlock(&fileWithdrawLock);
+  return NULL; 
+}
 
 
 

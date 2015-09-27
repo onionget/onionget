@@ -8,6 +8,7 @@ typedef struct diskFileObject{
   int                 (*closeTearDown)(struct diskFileObject** thisPointer); 
   int                 (*dfOpen)(struct diskFileObject *this, char *path, char *name, char *mode);
   uint32_t            (*getBytesize)(diskFile *this);
+  char                *(getFileName)(diskFileObject *this); 
 }diskFileObject; 
 
 

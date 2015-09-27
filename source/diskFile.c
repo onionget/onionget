@@ -21,6 +21,7 @@ typedef struct diskFilePrivate{
   FILE           *descriptor; 
   void           *cache; 
   uint32_t       cacheBytesize; 
+  char           *name;
 }diskFilePrivate;
 
 
@@ -37,6 +38,7 @@ static int fileModeWritable(char *mode);
 static int fileModeValid(char *mode);
 static int fileModeSeekable(char *mode); 
 static int initializeFileProperties(diskFileObject *this, char *path, char *name, char *mode);
+char *getFilename(diskFileObject *this);
 
 
 
@@ -68,6 +70,7 @@ diskFileObject *newDiskFile(void)
   privateThis->publicDiskFile.dfRead          = &dfRead; 
   privateThis->publicDiskFile.closeTearDown   = &closeTearDown;
   privateThis->publicDiskFile.getBytesize     = &getBytesize;
+  privateThis->publicDiskFile.getFilename     = &getFilename; 
   
 
   //initialize private properties 
@@ -78,6 +81,7 @@ diskFileObject *newDiskFile(void)
   privateThis->bytesize         = -1; 
   privateThis->cache            = NULL;
   privateThis->cacheBytesize    = 0; 
+  privateThis->name             = "\0"; 
   
 
   return (diskFileObject *) privateThis; 
@@ -88,7 +92,17 @@ diskFileObject *newDiskFile(void)
 /******** PUBLIC METHODS *********/
 
 
-
+char *getFilename(diskFileObject *this)
+{
+  diskFilePrivate *private = (diskFilePrivate *)this;
+  
+  if(private == NULL){
+    logEvent("Error", "Something was NULL that shouldn't have been");
+    return NULL; 
+  }
+  
+  return private->name;
+}
 
 
 /*
@@ -268,6 +282,8 @@ static int dfOpen(diskFileObject *this, char *path, char *name, char *mode)
     return 0; 
   }
   
+  
+  
   if( fileModeSeekable(private->mode) == 1 ){ 
     private->bytesize = this->dfBytesize(this); 
     if(private->bytesize == -1){
@@ -275,7 +291,8 @@ static int dfOpen(diskFileObject *this, char *path, char *name, char *mode)
       return 0; 
     }
   }
- 
+  
+  private->name = name; //TODO fix this entire file up  (maybe stop relying on \0 termination externally for this); 
   return 1;
 }
 
